@@ -869,6 +869,65 @@ await test('xoá dự án xoá cả ảnh tham chiếu của màn ⑥', async ()
   assert.deepEqual(imageIdsOf(p), ['a']);
 });
 
+/* ---------------- Màn ⑥ — các lỗi đã sửa sau lượt soát ---------------- */
+
+const ids4 = ['S1', 'S2', 'S3', 'S4'];
+
+await test('bible lệch kịch bản (thêm cảnh, đổi thời điểm) thì không duyệt được', () => {
+  const b = goodBible();
+  assert.deepEqual(checkBible(b, { nhanVat: chars, canhIds: ids4, kichBan: kbBible() }).errors, []);
+  let kb = kbBible();
+  kb = { ...kb, danY: { ...kb.danY, canh: kb.danY.canh.map((c) => (c.id === 'S2' ? { ...c, thoiDiem: 'chiều' } : c)) } };
+  const e = checkBible(b, { nhanVat: chars, canhIds: ids4, kichBan: kb }).errors;
+  assert.ok(e.some((x) => x.includes('chưa khớp kịch bản')), e.join('\n'));
+});
+
+await test('bóc tách lại: đổi thời điểm thì biến thể cũ giữ lại (không còn dùng), biến thể mới không lấy tag đang có ảnh', () => {
+  const old = goodBible();
+  old.anh.phongtro = { imageId: 'IMG_KHUYA' };
+  let kb = kbBible();
+  // Mọi cảnh khuya đổi sang trưa
+  kb = { ...kb, danY: { ...kb.danY, canh: kb.danY.canh.map((c) => (c.thoiDiem === 'khuya' ? { ...c, thoiDiem: 'trưa' } : c)) } };
+  const v = bocTach(kb, chars, old).boiCanh[0].bienThe;
+  const cu = v.find((x) => x.tag === 'phongtro')!;
+  assert.equal(cu.khongDung, true);
+  assert.equal(cu.khungAnh, old.boiCanh[0].bienThe[0].khungAnh, 'giữ phần đã làm');
+  const trua = v.find((x) => x.thoiDiem === 'trưa')!;
+  assert.notEqual(trua.tag, 'phongtro');
+  assert.ok(!old.anh[trua.tag], 'biến thể mới không mang ảnh cũ');
+  assert.ok(!mucAnh({ ...old, boiCanh: [{ ...old.boiCanh[0], bienThe: v }] }, '9:16').find((m) => m.tag === 'phongtro' && !m.khongDung));
+});
+
+await test('bóc tách lại: nhân vật chuyển sang chỉ có giọng thì bộ đồ cũ vẫn giữ', () => {
+  const old = goodBible();
+  let kb = kbBible();
+  kb = { ...kb, danY: { ...kb.danY, canh: kb.danY.canh.map((c) => ({ ...c, coMat: [] })) } };
+  Object.keys(kb.canh).forEach((id) => (kb = suaCanh(kb, id, kb.canh[id].beats.map((b) => ({ ...b, coMat: b.coMat.filter((t) => t !== 'lan'), thoai: [{ ai: 'lan', cachNoi: '', cau: 'Alo.' }] })), 5)));
+  const lan = bocTach(kb, chars, old).nhanVat.find((n) => n.tag === 'lan')!;
+  assert.deepEqual(lan.canh, []);
+  assert.equal(lan.bo[0].moTa, EN.moTa);
+});
+
+await test('AI viết lại nhân vật đổi thứ tự bộ đồ: tag giữ theo tên bộ, ảnh không bị tráo', async () => {
+  const b = goodBible();
+  const lan = b.nhanVat.find((n) => n.tag === 'lan')!;
+  lan.bo = [{ ...lan.bo[0], ten: 'đồ đi làm', canh: ['S1', 'S2', 'S3'] }, { ...lan.bo[0], tag: 'lando', ten: 'đồ ngủ', canh: ['S4'] }];
+  b.anh = { lan: { imageId: 'IMG_DI_LAM' }, lando: { imageId: 'IMG_NGU' } };
+  const bo = (ten: string, canh: number[]) => ({ ten, canh, moTa: EN.moTa, note: 'Ghi chú.', khungAnh: EN.khung, vaiTro: 'Lan in her outfit' });
+  const raw = { nhanVat: [{ tag: 'lan', giong: '', bo: [bo('đồ ngủ', [4]), bo('đồ đi làm', [1, 2, 3])] }, { tag: 'me', giong: 'warm gentle female voice', bo: [] }] };
+  const r = await runTask(bibleNhanVat, bibleInput(b), 'p1', fakeDeps([raw]));
+  assert.deepEqual(r.errors, []);
+  const out = r.output.find((n) => n.tag === 'lan')!.bo.map((x) => [x.ten, x.tag]);
+  assert.deepEqual(out, [['đồ ngủ', 'lando'], ['đồ đi làm', 'lan']]);
+});
+
+await test('tag bộ đồ trùng tag nhân vật chỉ có giọng thì lỗi', () => {
+  const b = goodBible();
+  b.nhanVat = b.nhanVat.map((n) => (n.tag === 'lan' ? { ...n, bo: [n.bo[0], { ...n.bo[0], tag: 'me', ten: 'đồ ngủ', canh: [] }] } : n));
+  const e = checkBible(b, { nhanVat: chars, canhIds: ids4 }).errors;
+  assert.ok(e.some((x) => x.includes('@me bị trùng')), e.join('\n'));
+});
+
 /* ---------------- Kết quả ---------------- */
 
 console.log(`\n${passed} test đạt, ${failures.length} test lỗi.`);

@@ -3,11 +3,11 @@
 import React, { useRef, useState } from 'react';
 import { ScanLine, Palette, Users, Package, MapPin, Image as ImageIcon, Sparkles, ArrowRight, Wand2 } from 'lucide-react';
 import type { Project, ProjectPatch, SectionKey, Section, BibleData, BibleNhanVat, BibleDaoCu, BibleBoiCanh, AnhSangCanh } from '../../types';
-import { freshSection, editSection, approveSection, keepSection, missingDeps, blockedDeps, depRevs } from '../../../shared/project';
+import { freshSection, editSection, approveSection, keepSection, missingDeps, blockedDeps, depRevs, isStale } from '../../../shared/project';
 import { bocTach, emptyBible, mucAnh, khoaAnhSang } from '../../../shared/bible';
-import { checkBible, checkBibleNhanVat, checkBibleDaoCu, checkBibleBoiCanh, checkStyle } from '../../../shared/checks';
+import { checkBible, checkBibleNhanVat, checkBibleDaoCu, checkBibleBoiCanh, checkStyle, tagNgoaiBoDo } from '../../../shared/checks';
 import { runTask } from '../../services/api';
-import { askConfirm } from '../../lib/dialog';
+import { askConfirm, notify } from '../../lib/dialog';
 import { ErrorBox, RunButton } from '../ui';
 import { ScreenIntro, StatusBar, Issues, ReviseBox, useRunner, LockedScreen, UpstreamBanner } from './common';
 import { StylePanel, NhanVatPanel, DaoCuPanel, BoiCanhPanel } from './bible/MucPanels';
@@ -44,17 +44,45 @@ export default function BibleScreen({ project, onUpdate, onGo }: Props) {
   const order = kb.danY.canh.map((c) => c.id);
   const section = project.sections.bible;
   const b = section?.data;
-  const ctx = { nhanVat, canhIds: order };
+  const stale = isStale(project, 'bible');
+  const ctx = { nhanVat, canhIds: order, kichBan: kb };
   const full = b ? checkBible(b, ctx) : { errors: [], warnings: [] };
 
   /* ---------- Ghi dữ liệu ---------- */
 
   const setSection = (fn: (latest: Project) => Section<BibleData> | undefined) => onUpdate((latest) => ({ sections: { ...latest.sections, bible: fn(latest) } }));
-  const edit = (fn: (x: BibleData) => BibleData) =>
+  /** Sửa bible → về nháp. `now` để biết đúng lần ghi (dùng khi chạy nhiều nhóm liền nhau). */
+  const edit = (fn: (x: BibleData) => BibleData, now = Date.now()) =>
     setSection((latest) => {
       const s = latest.sections.bible;
-      return s ? editSection(s, fn(s.data), Date.now()) : s;
+      return s ? editSection(s, fn(s.data), now) : s;
     });
+  /** Ảnh tham chiếu nằm ngoài việc duyệt: thêm / thay ảnh không làm màn 6 về nháp (docs/LUOT-3.md). */
+  const setAnh = (patch: BibleData['anh']) =>
+    setSection((latest) => {
+      const s = latest.sections.bible;
+      return s ? { ...s, data: { ...s.data, anh: { ...s.data.anh, ...patch } } } : s;
+    });
+  /** Đổi tag một bộ đồ: kiểm hợp lệ, không trùng, chuyển ảnh sang tag mới. */
+  const doiTag = (oldTag: string, newTag: string): boolean => {
+    const x = latestRef.current.sections.bible?.data;
+    if (!x) return false;
+    const taken = new Set([...tagNgoaiBoDo(x, nhanVat), ...x.nhanVat.flatMap((n) => n.bo.map((y) => y.tag)), ...Object.keys(x.anh).filter((k) => x.anh[k]?.imageId)]);
+    taken.delete(oldTag);
+    if (!/^[a-z0-9]{1,15}$/.test(newTag) || taken.has(newTag)) {
+      notify(`Không đổi được sang @${newTag || '(trống)'}: tag phải viết liền, không dấu, tối đa 15 ký tự và không trùng tag khác (kể cả tag đã có ảnh).`, 'Tag không hợp lệ');
+      return false;
+    }
+    edit((y) => {
+      const anh = { ...y.anh };
+      if (anh[oldTag]) {
+        anh[newTag] = anh[oldTag];
+        delete anh[oldTag];
+      }
+      return { ...y, anh, nhanVat: y.nhanVat.map((n) => ({ ...n, bo: n.bo.map((bo) => (bo.tag === oldTag ? { ...bo, tag: newTag } : bo)) })) };
+    });
+    return true;
+  };
 
   /** Bóc tách (lại) từ kịch bản chốt: giữ phần đã làm của mục còn dùng. Không gọi AI. */
   const bocTachLai = () => {
@@ -90,24 +118,25 @@ export default function BibleScreen({ project, onUpdate, onGo }: Props) {
       return r;
     });
 
-  /** Gọi AI cho một nhóm và ghi kết quả (giữ các mục "không còn dùng"). Trả lỗi còn lại. */
-  const goiNhom = async (nhom: Nhom, yeuCau = ''): Promise<string[] | null> => {
-    const startedAt = latestRef.current.sections.bible?.meta.updatedAt;
+  /** Gọi AI cho một nhóm và ghi kết quả (giữ các mục "không còn dùng"). Trả lỗi còn lại và thời điểm ghi.
+   *  startedAt: lần ghi trước của chính "viết tất cả" (không đọc lại từ giao diện, tránh hỏi nhầm). */
+  const goiNhom = async (nhom: Nhom, yeuCau = '', startedAt = latestRef.current.sections.bible?.meta.updatedAt): Promise<{ errors: string[]; at: number } | null> => {
     const r = await runTask<any>(`bible-${nhom}`, input(latestRef.current, yeuCau), project.id);
     if (await changedSince(startedAt, TEN_NHOM[nhom])) return null;
+    const at = Math.max(Date.now(), (startedAt || 0) + 1);
     edit((x) => {
       if (nhom === 'nhan-vat') return { ...x, nhanVat: [...(r.output as BibleNhanVat[]), ...x.nhanVat.filter((n) => n.khongDung)] };
       if (nhom === 'dao-cu') return { ...x, daoCu: [...(r.output as BibleDaoCu[]), ...x.daoCu.filter((d) => d.khongDung)] };
       const o = r.output as { boiCanh: BibleBoiCanh[]; anhSang: AnhSangCanh[] };
       return { ...x, boiCanh: [...o.boiCanh, ...x.boiCanh.filter((c) => c.khongDung)], anhSang: o.anhSang };
-    });
-    return r.errors.map((e) => `${TEN_NHOM[nhom][0].toUpperCase()}${TEN_NHOM[nhom].slice(1)}: ${e}`);
+    }, at);
+    return { errors: r.errors.map((e) => `${TEN_NHOM[nhom][0].toUpperCase()}${TEN_NHOM[nhom].slice(1)}: ${e}`), at };
   };
 
   const viet = (nhom: Nhom, yeuCau = '') =>
     run(nhom, async () => {
-      const errors = await goiNhom(nhom, yeuCau);
-      return errors ? { errors } : undefined;
+      const r = await goiNhom(nhom, yeuCau);
+      return r ? { errors: r.errors } : undefined;
     });
 
   /** Viết lần lượt nhân vật → đạo cụ → bối cảnh. */
@@ -116,12 +145,14 @@ export default function BibleScreen({ project, onUpdate, onGo }: Props) {
       const errors: string[] = [];
       try {
         const nhoms: Nhom[] = ['nhan-vat', ...(latestRef.current.sections.bible!.data.daoCu.some((d) => !d.khongDung) ? (['dao-cu'] as Nhom[]) : []), 'boi-canh'];
+        let at = latestRef.current.sections.bible?.meta.updatedAt;
         for (let k = 0; k < nhoms.length; k++) {
           setTienDo(`AI đang viết ${TEN_NHOM[nhoms[k]]} (${k + 1}/${nhoms.length})…`);
-          const e = await goiNhom(nhoms[k]);
-          if (e === null) break;
-          errors.push(...e);
-          await new Promise((res) => setTimeout(res, 30)); // chờ giao diện nhận bản mới
+          const r = await goiNhom(nhoms[k], '', at);
+          if (r === null) break;
+          errors.push(...r.errors);
+          at = r.at;
+          await new Promise((res) => setTimeout(res, 30)); // chờ giao diện nhận bản mới trước khi gửi nhóm sau
         }
       } finally {
         setTienDo('');
@@ -135,12 +166,12 @@ export default function BibleScreen({ project, onUpdate, onGo }: Props) {
   /* ---------- Hiển thị ---------- */
 
   const noStyle = !b?.style.trim();
-  const aiOff = !!busy || blocked;
-  const tagNgoai = (x: BibleData) => new Set([...x.daoCu.map((d) => d.tag), ...x.boiCanh.flatMap((c) => c.bienThe.map((v) => v.tag))]);
+  // Đã cũ (kịch bản đổi): bóc tách lại trước khi để AI viết, kẻo AI viết theo danh sách cũ
+  const aiOff = !!busy || blocked || stale;
   const per = b
     ? {
         style: { errors: b.style ? checkStyle(b.style, nhanVat) : ['Chưa chọn style.'], warnings: [] as string[] },
-        nhanVat: checkBibleNhanVat(b.nhanVat, ctx, tagNgoai(b)),
+        nhanVat: checkBibleNhanVat(b.nhanVat, ctx, tagNgoaiBoDo(b, nhanVat)),
         daoCu: checkBibleDaoCu(b.daoCu, ctx),
         boiCanh: checkBibleBoiCanh(b.boiCanh, b.anhSang, ctx),
       }
@@ -192,6 +223,7 @@ export default function BibleScreen({ project, onUpdate, onGo }: Props) {
             </button>
           </div>
           {noStyle && <p className="text-sm text-amber-900">Chọn style trước (tab Style) — mọi phần cố định đều viết theo style này.</p>}
+          {stale && <p className="text-sm text-amber-900">Kịch bản đã đổi sau lần bóc tách trước. Bấm "Bóc tách lại từ kịch bản" (phần đã làm được giữ) rồi mới để AI viết tiếp.</p>}
 
           <nav aria-label="Các phần của bible" className="grid grid-cols-2 sm:grid-cols-5 gap-2">
             {tabs.map((t) => (
@@ -239,6 +271,7 @@ export default function BibleScreen({ project, onUpdate, onGo }: Props) {
               order={order}
               onChange={(tag, fn) => edit((x) => ({ ...x, nhanVat: x.nhanVat.map((n) => (n.tag === tag ? fn(n) : n)) }))}
               onRemove={(tag) => edit((x) => ({ ...x, nhanVat: x.nhanVat.filter((n) => n.tag !== tag) }))}
+              onDoiTag={doiTag}
             />
           )}
           {tab === 'daoCu' && (
@@ -258,9 +291,10 @@ export default function BibleScreen({ project, onUpdate, onGo }: Props) {
               onBienThe={(tag, vtag, patch) => edit((x) => ({ ...x, boiCanh: x.boiCanh.map((c) => (c.tag === tag ? { ...c, bienThe: c.bienThe.map((v) => (v.tag === vtag ? { ...v, ...patch } : v)) } : c)) }))}
               onAnhSang={(a, moTa) => edit((x) => ({ ...x, anhSang: x.anhSang.map((y) => (khoaAnhSang(y) === khoaAnhSang(a) ? { ...y, moTa } : y)) }))}
               onRemove={(tag) => edit((x) => ({ ...x, boiCanh: x.boiCanh.filter((c) => c.tag !== tag) }))}
+              onXoaBienThe={(tag, vtag) => edit((x) => ({ ...x, boiCanh: x.boiCanh.map((c) => (c.tag === tag ? { ...c, bienThe: c.bienThe.filter((v) => v.tag !== vtag) } : c)) }))}
             />
           )}
-          {tab === 'anh' && <AnhPanel projectId={project.id} muc={muc} anh={b.anh} onSet={(patch) => edit((x) => ({ ...x, anh: { ...x.anh, ...patch } }))} />}
+          {tab === 'anh' && <AnhPanel projectId={project.id} muc={muc} anh={b.anh} onSet={setAnh} />}
 
           {nhomOf[tab] && <ReviseBox onSubmit={(t) => viet(nhomOf[tab]!, t)} busy={busy === nhomOf[tab]} disabled={aiOff || noStyle} placeholder={VI_DU_SUA[nhomOf[tab]!]} />}
           {issuesOf(tab) && <Issues errors={issuesOf(tab)!.errors} warnings={issuesOf(tab)!.warnings} />}

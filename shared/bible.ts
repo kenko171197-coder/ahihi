@@ -54,7 +54,7 @@ export function mucAnh(b: BibleData, tiLe: string): MucAnh[] {
           { label: 'prompt ảnh chính', text: promptNhanVat(bo, b.style) },
           { label: 'reference sheet', text: promptSheet(bo, b.style) },
         ],
-        khongDung: n.khongDung,
+        khongDung: n.khongDung || !n.canh.length,
       }))
     ),
     ...b.daoCu.map((d) => ({ tag: d.tag, loai: 'prop' as const, ten: d.moTaKichBan || d.tag, note: d.note, vaiTro: d.vaiTro, prompts: [{ label: 'prompt ảnh', text: promptDaoCu(d, b.style) }], khongDung: d.khongDung })),
@@ -66,7 +66,7 @@ export function mucAnh(b: BibleData, tiLe: string): MucAnh[] {
         note: v.note,
         vaiTro: v.vaiTro,
         prompts: [{ label: 'prompt ảnh', text: promptBoiCanh(c, v, b.style, tiLe) }],
-        khongDung: c.khongDung,
+        khongDung: c.khongDung || v.khongDung,
       }))
     ),
   ];
@@ -118,8 +118,11 @@ export function bocTach(kb: KichBanData, chars: Character[], old: BibleData = em
       if (!bo.length) bo = [{ tag: ch.tag, ten: 'mặc định', canh: [], moTa: '', note: '', khungAnh: '', vaiTro: '' }];
       const covered = new Set(bo.flatMap((x) => x.canh));
       const missing = canh.filter((id) => !covered.has(id));
-      bo = bo.map((x, i) => (i === 0 ? { ...x, canh: sortCanh([...x.canh, ...missing]) } : x));
-    } else bo = [];
+      // Cảnh mới chưa thuộc bộ nào → vào bộ mang tag nhân vật (hoặc bộ đầu)
+      const k = Math.max(0, bo.findIndex((x) => x.tag === ch.tag));
+      bo = bo.map((x, i) => (i === k ? { ...x, canh: sortCanh([...x.canh, ...missing]) } : x));
+    }
+    // Không còn xuất hiện trên hình (chỉ có giọng): bộ đồ cũ vẫn giữ (cảnh rỗng) để không mất phần đã làm
     nhanVat.push({ tag: ch.tag, ten: ch.ten, canh, coThoai, giong: prev?.giong || '', bo });
   });
 
@@ -144,9 +147,10 @@ export function bocTach(kb: KichBanData, chars: Character[], old: BibleData = em
 
   /* --- Bối cảnh (biến thể theo thời điểm) --- */
   const boiCanh: BibleBoiCanh[] = [];
+  // Tag của mục mới (không được chiếm) và tag đã từng dùng / đã có ảnh (không cấp lại cho mục mới)
   const taken = new Set<string>([...chars.map((c) => c.tag), ...daoCu.map((d) => d.tag), ...kb.danY.canh.map((c) => c.tagDiaDiem).filter(Boolean)]);
-  // Tag cũ của bộ đồ / biến thể vẫn giữ chỗ để không bị cấp trùng
   nhanVat.forEach((n) => n.bo.forEach((x) => taken.add(x.tag)));
+  const reserved = new Set<string>([...tagsDaDung(old), ...Object.keys(old.anh)]);
   kb.danY.canh.forEach((c) => {
     if (!c.tagDiaDiem) return;
     let loc = boiCanh.find((x) => x.tag === c.tagDiaDiem);
@@ -174,9 +178,17 @@ export function bocTach(kb: KichBanData, chars: Character[], old: BibleData = em
         taken.add(prev.tag);
       }
     });
+    // Biến thể cũ không còn (đổi thời điểm): giữ lại, đánh dấu — tag của nó không cấp cho biến thể mới
+    (prevLoc?.bienThe || [])
+      .filter((x) => !loc.bienThe.some((v) => v.tag === x.tag) && !used.has(x.tag))
+      .forEach((x) => {
+        loc.bienThe.push({ ...x, canh: [], khongDung: true });
+        used.add(x.tag);
+      });
     loc.bienThe.forEach((v) => {
       if (v.tag) return;
-      v.tag = used.has(loc.tag) ? uniqueTag(`${loc.tag}${toTag(v.thoiDiem) || 'b'}`, new Set([...taken, ...used])) : loc.tag;
+      const free = !used.has(loc.tag) && !old.anh[loc.tag]?.imageId;
+      v.tag = free ? loc.tag : uniqueTag(`${loc.tag}${toTag(v.thoiDiem) || 'b'}`, new Set([...taken, ...used, ...reserved]));
       used.add(v.tag);
       taken.add(v.tag);
     });

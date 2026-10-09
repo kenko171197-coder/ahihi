@@ -69,24 +69,54 @@ export function StylePanel({ b, onStyle }: { b: BibleData; onStyle: (s: string) 
 
 /* ============================ Nhân vật ============================ */
 
-export function NhanVatPanel({ b, order, onChange, onRemove }: { b: BibleData; order: string[]; onChange: (tag: string, fn: (n: BibleNhanVat) => BibleNhanVat) => void; onRemove: (tag: string) => void }) {
+/** Ô tag: gõ tự do, rời ô mới đổi (để tag không trùng tạm thời với tag khác trong lúc gõ). */
+function TagInput({ id, value, disabled, onCommit }: { id: string; value: string; disabled?: boolean; onCommit: (tag: string) => boolean }) {
+  const [text, setText] = React.useState(value);
+  React.useEffect(() => setText(value), [value]);
+  return (
+    <input
+      id={id}
+      value={text}
+      disabled={disabled}
+      onChange={(e) => setText(toTag(e.target.value))}
+      onBlur={() => {
+        if (text !== value && !onCommit(text)) setText(value);
+      }}
+      className={`${fieldCls} disabled:opacity-60`}
+    />
+  );
+}
+
+export function NhanVatPanel({
+  b, order, onChange, onRemove, onDoiTag,
+}: {
+  b: BibleData;
+  order: string[];
+  onChange: (tag: string, fn: (n: BibleNhanVat) => BibleNhanVat) => void;
+  onRemove: (tag: string) => void;
+  /** Đổi tag một bộ đồ (kèm chuyển ảnh). Trả false nếu tag không hợp lệ / trùng. */
+  onDoiTag: (oldTag: string, newTag: string) => boolean;
+}) {
   return (
     <div className="space-y-4">
       {b.nhanVat.length === 0 && <p className="text-sm text-gray-600">Kịch bản không có nhân vật nào.</p>}
       {b.nhanVat.map((n) => {
-        const setBo = (tag: string, patch: Partial<BoDo>) => onChange(n.tag, (x) => ({ ...x, bo: x.bo.map((y) => (y.tag === tag ? { ...y, ...patch } : y)) }));
+        // Bộ đồ được chỉ theo vị trí (không theo tag) để sửa một bộ không bao giờ đụng bộ khác
+        const setBo = (k: number, patch: Partial<BoDo>) => onChange(n.tag, (x) => ({ ...x, bo: x.bo.map((y, j) => (j === k ? { ...y, ...patch } : y)) }));
         /** Chọn bộ đồ cho một cảnh: cảnh đó rời các bộ khác (mỗi cảnh đúng một bộ). */
-        const ganCanh = (tag: string, id: string) => onChange(n.tag, (x) => ({ ...x, bo: x.bo.map((y) => ({ ...y, canh: y.tag === tag ? order.filter((c) => c === id || y.canh.includes(c)) : y.canh.filter((c) => c !== id) })) }));
+        const ganCanh = (k: number, id: string) => onChange(n.tag, (x) => ({ ...x, bo: x.bo.map((y, j) => ({ ...y, canh: j === k ? order.filter((c) => c === id || y.canh.includes(c)) : y.canh.filter((c) => c !== id) })) }));
         const themBo = () =>
           onChange(n.tag, (x) => {
-            const tag = uniqueTag(`${x.tag}bo`, tagsDaDung(b));
+            const tag = uniqueTag(`${x.tag}bo`, new Set([...tagsDaDung(b), ...Object.keys(b.anh)]));
             return { ...x, bo: [...x.bo, { tag, ten: `bộ ${x.bo.length + 1}`, canh: [], moTa: x.bo[0]?.moTa || '', note: '', khungAnh: x.bo[0]?.khungAnh || '', vaiTro: '' }] };
           });
-        const xoaBo = (tag: string) =>
+        /** Xoá một bộ: cảnh của nó về bộ mang tag nhân vật (hoặc bộ đầu). */
+        const xoaBo = (k: number) =>
           onChange(n.tag, (x) => {
-            const gone = x.bo.find((y) => y.tag === tag);
-            const rest = x.bo.filter((y) => y.tag !== tag);
-            return { ...x, bo: rest.map((y, i) => (i === 0 ? { ...y, canh: order.filter((c) => y.canh.includes(c) || gone?.canh.includes(c)) } : y)) };
+            const gone = x.bo[k];
+            const rest = x.bo.filter((_, j) => j !== k);
+            const dich = Math.max(0, rest.findIndex((y) => y.tag === x.tag));
+            return { ...x, bo: rest.map((y, j) => (j === dich ? { ...y, canh: order.filter((c) => y.canh.includes(c) || gone?.canh.includes(c)) } : y)) };
           });
         return (
           <article key={n.tag} className="bg-white border border-gray-200 rounded-2xl p-4 space-y-3" aria-label={`Nhân vật ${n.ten}`}>
@@ -104,17 +134,17 @@ export function NhanVatPanel({ b, order, onChange, onRemove }: { b: BibleData; o
               <section key={i} className="border-l-2 border-primary-400 pl-3 space-y-2" aria-label={`Bộ đồ ${bo.ten}`}>
                 <div className="flex flex-wrap items-end gap-2">
                   <div className="flex-1 min-w-[10rem]">
-                    <Field label={`Bộ đồ ${i + 1}`} value={bo.ten} onChange={(v) => setBo(bo.tag, { ten: v })} />
+                    <Field label={`Bộ đồ ${i + 1}`} value={bo.ten} onChange={(v) => setBo(i, { ten: v })} />
                   </div>
                   <div className="w-40">
                     <label htmlFor={`bo-${n.tag}-${i}`} className="block text-sm font-bold text-black mb-1">Tag ảnh</label>
                     <div className="flex items-center">
                       <span className="text-gray-500 mr-1">@</span>
-                      <input id={`bo-${n.tag}-${i}`} value={bo.tag} disabled={i === 0} onChange={(e) => setBo(bo.tag, { tag: toTag(e.target.value) })} className={`${fieldCls} disabled:opacity-60`} />
+                      <TagInput id={`bo-${n.tag}-${i}`} value={bo.tag} disabled={bo.tag === n.tag} onCommit={(t) => onDoiTag(bo.tag, t)} />
                     </div>
                   </div>
-                  {i > 0 && (
-                    <button onClick={() => xoaBo(bo.tag)} aria-label={`Xoá bộ đồ ${bo.ten}`} title="Xoá bộ đồ (cảnh của bộ này về bộ đầu)" className="p-2.5 rounded-xl text-gray-400 hover:text-red-600 hover:bg-red-50">
+                  {n.bo.length > 1 && (
+                    <button onClick={() => xoaBo(i)} aria-label={`Xoá bộ đồ ${bo.ten}`} title="Xoá bộ đồ (cảnh của bộ này về bộ đầu)" className="p-2.5 rounded-xl text-gray-400 hover:text-red-600 hover:bg-red-50">
                       <Trash2 className="w-4 h-4" />
                     </button>
                   )}
@@ -126,7 +156,7 @@ export function NhanVatPanel({ b, order, onChange, onRemove }: { b: BibleData; o
                       {n.canh.map((id) => {
                         const on = bo.canh.includes(id);
                         return (
-                          <button key={id} onClick={() => ganCanh(bo.tag, id)} aria-pressed={on} className={`px-2.5 py-1 rounded-full text-xs font-bold border ${on ? 'bg-black text-primary-400 border-black' : 'bg-white text-gray-600 border-gray-200 hover:border-primary-400'}`}>
+                          <button key={id} onClick={() => ganCanh(i, id)} aria-pressed={on} className={`px-2.5 py-1 rounded-full text-xs font-bold border ${on ? 'bg-black text-primary-400 border-black' : 'bg-white text-gray-600 border-gray-200 hover:border-primary-400'}`}>
                             Cảnh {order.indexOf(id) + 1}
                           </button>
                         );
@@ -134,12 +164,12 @@ export function NhanVatPanel({ b, order, onChange, onRemove }: { b: BibleData; o
                     </div>
                   </div>
                 )}
-                <EnField label="Mô tả cố định (ngoại hình + trang phục)" rows={3} value={bo.moTa} onChange={(v) => setBo(bo.tag, { moTa: v })} max={GIOI_HAN_TU.moTaNhanVat} />
+                <EnField label="Mô tả cố định (ngoại hình + trang phục)" rows={3} value={bo.moTa} onChange={(v) => setBo(i, { moTa: v })} max={GIOI_HAN_TU.moTaNhanVat} />
                 <div className="grid sm:grid-cols-2 gap-2">
-                  <Field label="Ô Note (tiếng Việt)" rows={2} value={bo.note} onChange={(v) => setBo(bo.tag, { note: v })} />
-                  <EnField label="Khung ảnh (góc, tư thế, nền)" value={bo.khungAnh} onChange={(v) => setBo(bo.tag, { khungAnh: v })} max={GIOI_HAN_TU.khungAnh} />
+                  <Field label="Ô Note (tiếng Việt)" rows={2} value={bo.note} onChange={(v) => setBo(i, { note: v })} />
+                  <EnField label="Khung ảnh (góc, tư thế, nền)" value={bo.khungAnh} onChange={(v) => setBo(i, { khungAnh: v })} max={GIOI_HAN_TU.khungAnh} />
                 </div>
-                <EnField label="Vai trò ảnh ở màn 8" rows={1} value={bo.vaiTro} onChange={(v) => setBo(bo.tag, { vaiTro: v })} max={GIOI_HAN_TU.vaiTro} placeholder="Lan in her office clothes" />
+                <EnField label="Vai trò ảnh ở màn 8" rows={1} value={bo.vaiTro} onChange={(v) => setBo(i, { vaiTro: v })} max={GIOI_HAN_TU.vaiTro} placeholder="Lan in her office clothes" />
                 <PromptBox label="Prompt ảnh chính" text={promptNhanVat(bo, b.style)} />
                 <PromptBox label="Prompt reference sheet" text={promptSheet(bo, b.style)} />
               </section>
@@ -189,7 +219,7 @@ export function DaoCuPanel({ b, order, onChange, onRemove }: { b: BibleData; ord
 /* ============================ Bối cảnh & ánh sáng ============================ */
 
 export function BoiCanhPanel({
-  b, order, tiLe, onChange, onBienThe, onAnhSang, onRemove,
+  b, order, tiLe, onChange, onBienThe, onAnhSang, onRemove, onXoaBienThe,
 }: {
   b: BibleData;
   order: string[];
@@ -199,6 +229,8 @@ export function BoiCanhPanel({
   /** Sửa câu ánh sáng của một cảnh — app chép sang mọi cảnh cùng địa điểm, thời điểm, ánh sáng */
   onAnhSang: (a: AnhSangCanh, moTa: string) => void;
   onRemove: (tag: string) => void;
+  /** Xoá một ảnh bối cảnh không còn dùng */
+  onXoaBienThe: (tag: string, vtag: string) => void;
 }) {
   const nhom = new Map<string, number>();
   b.anhSang.forEach((a) => nhom.set(khoaAnhSang(a), (nhom.get(khoaAnhSang(a)) || 0) + 1));
@@ -219,6 +251,7 @@ export function BoiCanhPanel({
               <p className="text-sm font-bold text-black">
                 Ảnh @{v.tag} · {v.thoiDiem || 'không rõ thời điểm'} <span className="font-normal text-gray-500">· {canhLabel(v.canh, order)}</span>
               </p>
+              {v.khongDung && <KhongDung ten={`Ảnh @${v.tag} (${v.thoiDiem})`} onRemove={() => onXoaBienThe(c.tag, v.tag)} />}
               <div className="grid sm:grid-cols-2 gap-2">
                 <EnField label="Khung ảnh (thời điểm, ánh sáng, góc rộng)" value={v.khungAnh} onChange={(x) => onBienThe(c.tag, v.tag, { khungAnh: x })} max={GIOI_HAN_TU.khungAnh} />
                 <Field label="Ô Note (tiếng Việt)" rows={2} value={v.note} onChange={(x) => onBienThe(c.tag, v.tag, { note: x })} />

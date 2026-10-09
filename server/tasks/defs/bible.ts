@@ -7,8 +7,8 @@ import { briefText, characterText, charactersText, danYNgan } from '../format';
 import type { AnhSangCanh, BibleBoiCanh, BibleData, BibleDaoCu, BibleNhanVat, BoDo, Brief, Character, KichBanData } from '../../../shared/project';
 import { toTag, uniqueTag } from '../../../shared/project';
 import { normCanhId, beatsOf } from '../../../shared/kichBan';
-import { dongBoAnhSang, emptyBible } from '../../../shared/bible';
-import { checkStyle, checkBibleNhanVat, checkBibleDaoCu, checkBibleBoiCanh, normName } from '../../../shared/checks';
+import { dongBoAnhSang } from '../../../shared/bible';
+import { checkStyle, checkBibleNhanVat, checkBibleDaoCu, checkBibleBoiCanh, normName, tagNgoaiBoDo } from '../../../shared/checks';
 import { parseBrief, parseCharacters } from './nhanVat';
 import { parseKichBan } from './raSoat';
 
@@ -18,7 +18,6 @@ const strs = (v: unknown, max = 40) => arr(v).map((x) => str(x, max)).filter(Boo
 
 export function parseBible(v: unknown): BibleData {
   const o = obj(v);
-  const base = emptyBible();
   return {
     style: str(o.style, 1200),
     phuongAnStyle: arr(o.phuongAnStyle).map((x) => ({ style: str(obj(x).style, 1200), giaiThich: str(obj(x).giaiThich, 600) })),
@@ -69,7 +68,8 @@ export function parseBible(v: unknown): BibleData {
       const a = obj(x);
       return { canh: str(a.canh, 20), diaDiem: toTag(str(a.diaDiem, 40)), thoiDiem: str(a.thoiDiem, 80), goc: str(a.goc, 300), moTa: str(a.moTa, 600) };
     }),
-    anh: base.anh,
+    // Chỉ cần biết tag nào đã có ảnh (để không cấp lại tag đó cho mục mới)
+    anh: Object.fromEntries(Object.keys(obj(o.anh)).map(toTag).filter(Boolean).map((k) => [k, {}])),
   };
 }
 
@@ -129,9 +129,6 @@ const DONG_ANH = {
   vaiTro: { type: 'STRING' },
 };
 
-/** Tag đang dùng ngoài nhóm nhân vật (để đặt tag bộ đồ không trùng). */
-const tagNgoaiNhanVat = (i: BibleInput) =>
-  new Set([...i.bible.daoCu.map((d) => d.tag), ...i.bible.boiCanh.flatMap((c) => [c.tag, ...c.bienThe.map((v) => v.tag)]), ...i.nhanVat.map((c) => c.tag).filter((t) => !i.bible.nhanVat.some((n) => n.tag === t))]);
 
 const ctxBible = (i: BibleInput) => ({ nhanVat: i.nhanVat, canhIds: canhIds(i) });
 
@@ -228,28 +225,37 @@ export const bibleNhanVat: TaskDef<BibleInput, BibleNhanVat[]> = {
   },
   normalize: (raw, i) => {
     const rows = arr(obj(raw).nhanVat).map(obj);
-    const taken = tagNgoaiNhanVat(i);
-    nhanVatCanLam(i).forEach((n) => taken.add(n.tag));
+    // Tag không được cấp cho bộ đồ mới: mọi tag đang dùng và mọi tag đã có ảnh
+    const taken = new Set([...tagNgoaiBoDo(i.bible, i.nhanVat), ...i.bible.nhanVat.flatMap((n) => n.bo.map((x) => x.tag)), ...Object.keys(i.bible.anh)]);
     return nhanVatCanLam(i).map((n) => {
       const r = rows.find((x) => toTag(str(x.tag, 40)) === n.tag) || {};
       const giong = str(r.giong, 600);
-      if (!n.canh.length) return { ...n, giong, bo: [] };
+      // Chỉ có giọng: giữ nguyên bộ đồ cũ (nếu có), không để AI xoá
+      if (!n.canh.length) return { ...n, giong };
+      const raws = arr(r.bo).map(obj);
       const used = new Set<string>();
-      const bo: BoDo[] = arr(r.bo).map((y, k) => {
-        const b = obj(y);
-        const ten = str(b.ten, 80) || (k === 0 ? 'mặc định' : `bộ ${k + 1}`);
-        // Bộ đầu mang tag nhân vật; bộ thêm giữ tag cũ nếu cùng tên, không thì code đặt tag mới
-        const old = n.bo.find((x, j) => j > 0 && normName(x.ten) === normName(ten) && !used.has(x.tag));
-        const tag = k === 0 ? n.tag : old ? old.tag : uniqueTag(`${n.tag}${toTag(ten)}`, new Set([...taken, ...used]));
-        used.add(tag);
-        taken.add(tag);
+      const tens = raws.map((b, k) => str(b.ten, 80) || (k === 0 ? 'mặc định' : `bộ ${k + 1}`));
+      // Lượt 1: bộ cùng tên với bộ cũ (ở bất kỳ vị trí nào) giữ tag cũ — ảnh không bị tráo sang bộ khác
+      const tags: string[] = tens.map((ten) => {
+        const old = n.bo.find((x) => normName(x.ten) === normName(ten) && !used.has(x.tag));
+        if (!old) return '';
+        used.add(old.tag);
+        return old.tag;
+      });
+      // Lượt 2: bộ mới — bộ đầu tiên chưa có tag nhận tag nhân vật (nếu còn trống), còn lại code đặt tag mới
+      tens.forEach((ten, k) => {
+        if (tags[k]) return;
+        tags[k] = !used.has(n.tag) && !n.bo.some((x) => x.tag === n.tag && tens.some((t) => normName(t) === normName(x.ten))) ? n.tag : uniqueTag(`${n.tag}${toTag(ten)}`, new Set([...taken, ...used]));
+        used.add(tags[k]);
+      });
+      const bo: BoDo[] = raws.map((b, k) => {
         const canh = Array.from(new Set(arr(b.canh).map((x) => canhIds(i)[int(x) - 1]).filter((id): id is string => !!id && n.canh.includes(id))));
-        return { tag, ten, canh, moTa: str(b.moTa, 1500), note: str(b.note, 600), khungAnh: str(b.khungAnh, 800), vaiTro: str(b.vaiTro, 200) };
+        return { tag: tags[k], ten: tens[k], canh, moTa: str(b.moTa, 1500), note: str(b.note, 600), khungAnh: str(b.khungAnh, 800), vaiTro: str(b.vaiTro, 200) };
       });
       return { ...n, giong, bo: bo.length ? bo : [{ tag: n.tag, ten: 'mặc định', canh: n.canh, moTa: '', note: '', khungAnh: '', vaiTro: '' }] };
     });
   },
-  check: (out, i) => checkBibleNhanVat(out, ctxBible(i), tagNgoaiNhanVat(i)),
+  check: (out, i) => checkBibleNhanVat(out, ctxBible(i), tagNgoaiBoDo({ ...i.bible, nhanVat: out }, i.nhanVat)),
   isEmpty: (out) => out.every((n) => !n.giong && n.bo.every((b) => !b.moTa)),
 };
 
@@ -332,7 +338,7 @@ export const bibleBoiCanh: TaskDef<BibleInput, { boiCanh: BibleBoiCanh[]; anhSan
       ...commonVars(i, ctx),
       ti_le: i.brief.tiLe,
       can_lam: list
-        .map((c) => [`- @${c.tag} — ${c.ten} (${dsCanh(i, c.canh)})`, ...c.bienThe.map((v) => `    · biến thể @${v.tag}: ${v.thoiDiem || '(không rõ thời điểm)'} — ${dsCanh(i, v.canh)}`)].join('\n'))
+        .map((c) => [`- @${c.tag} — ${c.ten} (${dsCanh(i, c.canh)})`, ...c.bienThe.filter((v) => !v.khongDung).map((v) => `    · biến thể @${v.tag}: ${v.thoiDiem || '(không rõ thời điểm)'} — ${dsCanh(i, v.canh)}`)].join('\n'))
         .join('\n'),
       canh: canhText(i),
       ban_truoc: i.yeuCau
@@ -356,6 +362,7 @@ export const bibleBoiCanh: TaskDef<BibleInput, { boiCanh: BibleBoiCanh[]; anhSan
           ...c,
           moTa: str(r.moTa, 1500),
           bienThe: c.bienThe.map((v) => {
+            if (v.khongDung) return v;
             const x = vs.find((y) => toTag(str(y.tag, 40)) === v.tag) || {};
             return { ...v, note: str(x.note, 600), khungAnh: str(x.khungAnh, 800), vaiTro: str(x.vaiTro, 200) };
           }),

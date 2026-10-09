@@ -132,17 +132,20 @@ export default function AnhPanel({ projectId, muc, anh, onSet }: Props) {
       }
       setPending(loaded);
       const tagList = dangDung.map((m) => ({ tag: m.tag, kind: m.loai, note: m.note, description: `${m.ten}${m.vaiTro ? ` — ${m.vaiTro}` : ''}` }));
-      const results: ImageMatch[] = [];
+      // Quét từng lô 8 ảnh; lô nào xong hiện kết quả ngay
       for (let i = 0; i < loaded.length; i += 8) {
         const res = await matchImages(loaded.slice(i, i + 8).map((p) => splitDataUrl(p.preview)), tagList, projectId);
-        res.forEach((r) => results.push({ ...r, index: r.index + i }));
+        setPending((list) =>
+          list.map((p, j) => {
+            const m = res.find((r) => r.index + i === j);
+            return m ? { ...p, match: { ...m, index: j }, tag: m.tag || '' } : p;
+          })
+        );
       }
-      setPending(loaded.map((p, i) => {
-        const m = results.find((r) => r.index === i) || null;
-        return { ...p, match: m, tag: m?.tag || '' };
-      }));
     } catch (e: any) {
-      setError(e.message);
+      setError(`${e.message} — ảnh chưa quét được thì chọn tag bằng tay.`);
+      // Ảnh chưa quét được vẫn chọn tag bằng tay được
+      setPending((list) => list.map((p) => (p.match ? p : { ...p, match: { index: -1, tag: '', confidence: 0, seen: '', warning: 'Chưa quét được — chọn tag bằng tay.' } })));
     } finally {
       setBusy('');
     }
@@ -150,20 +153,24 @@ export default function AnhPanel({ projectId, muc, anh, onSet }: Props) {
 
   const savePending = async () => {
     setBusy('save');
+    // Ghi các ảnh đã lưu xong vào dự án trước, rồi mới xoá ảnh cũ — lỗi giữa chừng không để tag trỏ vào ảnh đã xoá
+    const patch: Record<string, AnhThamChieu> = {};
+    const xoa: string[] = [];
     try {
-      const patch: Record<string, AnhThamChieu> = {};
       for (const p of pending) {
         if (!p.tag) continue;
-        const old = patch[p.tag]?.imageId || anh[p.tag]?.imageId;
         const id = await putImage(p.full);
-        if (old) await deleteImage(old).catch(() => undefined);
+        const old = patch[p.tag]?.imageId || anh[p.tag]?.imageId;
+        if (old) xoa.push(old);
         patch[p.tag] = { imageId: id, seen: p.match?.seen || '', warning: p.match?.warning || '' };
       }
-      onSet(patch);
       setPending([]);
     } catch (e: any) {
-      setError(e.message);
+      setError(`${e.message} — đã lưu ${Object.keys(patch).length} ảnh trước khi lỗi.`);
+      setPending((list) => list.filter((p) => !p.tag || !patch[p.tag]));
     } finally {
+      if (Object.keys(patch).length) onSet(patch);
+      xoa.forEach((id) => deleteImage(id).catch(() => undefined));
       setBusy('');
     }
   };
@@ -173,8 +180,8 @@ export default function AnhPanel({ projectId, muc, anh, onSet }: Props) {
       const full = await readAndResize(file, 1536);
       const old = anh[tag]?.imageId;
       const id = await putImage(full);
-      if (old) await deleteImage(old).catch(() => undefined);
       onSet({ [tag]: { imageId: id, seen: '', warning: '' } });
+      if (old) deleteImage(old).catch(() => undefined);
     } catch (e: any) {
       setError(e.message);
     }
@@ -182,8 +189,8 @@ export default function AnhPanel({ projectId, muc, anh, onSet }: Props) {
 
   const removeOne = async (tag: string) => {
     const old = anh[tag]?.imageId;
-    if (old) await deleteImage(old).catch(() => undefined);
     onSet({ [tag]: {} });
+    if (old) deleteImage(old).catch(() => undefined);
   };
 
   const dup = pending.map((p) => p.tag).filter((t, i, arr) => t && arr.indexOf(t) !== i);

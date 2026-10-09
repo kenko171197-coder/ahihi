@@ -374,6 +374,8 @@ export interface BienTheBoiCanh {
   note: string;
   khungAnh: string;
   vaiTro: string;
+  /** Thời điểm này không còn trong kịch bản (giữ lại để người dùng xoá) */
+  khongDung?: boolean;
 }
 
 export interface BibleBoiCanh {

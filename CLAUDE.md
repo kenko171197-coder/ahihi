@@ -45,7 +45,8 @@ Người dùng là nhà làm phim, không phải lập trình viên: **trả l�
 - **Thêm tác vụ AI:** viết `TaskDef` trong `server/tasks/defs/`, thêm vào `registry.ts`, thêm file `prompts/`, thêm dòng vào `TASKS` và `FEATURE_NAMES`, viết test (gồm test "file prompt chỉ dùng biến tác vụ cung cấp" — đã có sẵn, tự chạy cho mọi tác vụ trong registry).
 - **Code kiểm** đặt ở `shared/checks.ts` để cả server lẫn giao diện dùng. Lỗi (`errors`) chặn duyệt và làm AI bị gửi lại; cảnh báo (`warnings`) chỉ báo.
 - **Ghi dữ liệu dự án** luôn qua `onUpdate((latest) => …)` (không dùng bản `project` cũ sau `await`).
-- **Kết quả AI** lưu bằng `freshSection(latest, key, data, now, readRevs)` với `readRevs = depRevs(project, key)` chụp **lúc bấm nút**; hỏi trước khi ghi đè nếu người dùng đã sửa trong lúc AI chạy (xem `NhanVatScreen.tsx`).
+- **Kết quả AI** lưu bằng `freshSection(latest, key, data, now, readRevs)` với `readRevs = depRevs(project, key)` chụp **lúc bấm nút**; hỏi trước khi ghi đè nếu người dùng đã sửa trong lúc AI chạy (xem `NhanVatScreen.tsx`). Ngoại lệ: AI ghi **một phần nhỏ** vào phần đã có (một cảnh ở ④, một nhóm ở ⑥) dùng `editSection` — `basedOn` giữ theo lần tạo dàn ý / bóc tách.
+- **Ảnh tham chiếu** (màn ⑥, `bible.anh`) ghi thẳng, không qua `editSection`: ảnh không làm màn ⑥ mất duyệt.
 - **Mã cố định:** id cảnh / beat / nhân vật không bao giờ đánh lại số khi chèn hoặc xoá.
 - **Màn sau chỉ đọc bản đã duyệt** của màn trước; nút tạo / duyệt bị chặn khi `blockedDeps` khác rỗng.
 - Thông tin cố định (style, mô tả nhân vật, ánh sáng cảnh) do **code chép nguyên văn** vào prompt, không để AI viết lại.
