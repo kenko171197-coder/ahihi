@@ -7,7 +7,7 @@ Người dùng là nhà làm phim, không phải lập trình viên: **trả l�
 
 @docs/QUYET-DINH.md
 
-- Bản thiết kế lượt 2 (đã duyệt, đã làm): `docs/LUOT-2.md`. Lượt 3 cần bản thiết kế mới `docs/LUOT-3.md`.
+- Bản thiết kế lượt 2 (đã làm): `docs/LUOT-2.md`. Lượt 3: `docs/LUOT-3.md` (màn ⑥ đã duyệt; màn ⑦ thiết kế sau).
 - Mọi thay đổi phải khớp `docs/QUYET-DINH.md`. Muốn làm khác quyết định đã chốt → hỏi người dùng trước, sửa file đó trước rồi mới code.
 
 ## Cách làm việc (bắt buộc)

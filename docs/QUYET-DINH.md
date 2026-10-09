@@ -44,6 +44,7 @@ Cập nhật: 2026-10-09. Mọi thiết kế và code sau này phải khớp v�
 - Tạo video **theo thành phần** (nạp ảnh tham chiếu). **Không** tạo ảnh khung đầu. Nạp được **hơn 10 ảnh**.
 - **Một beat = một prompt = một lần tạo**, kể cả khi beat có nhiều shot. Không có tùy chọn tách shot.
 - **Không dùng Extend.**
+- **Bible (màn ⑥):** một **style cố định** xuyên suốt phim. Nhân vật đổi trang phục → mỗi bộ đồ một tag và một ảnh riêng; mỗi cảnh dùng đúng một bộ. Ảnh bối cảnh: mỗi cặp **địa điểm + thời điểm** có trong phim một ảnh. **Giọng nhân vật** chỉ dùng trong prompt video (phần thoại), không nằm trong ảnh.
 - **Frame nối, bản gọn:** bạn chụp frame từ video beat trước, dán vào beat đó; app tự thêm frame vào danh sách ảnh và prompt của beat sau (code làm, không gọi AI). Không chấm điểm frame. Chưa có frame thì prompt vẫn dùng được, kèm ghi chú độ khớp thấp hơn.
 
 ## 6. Khung prompt video (màn ⑧)
@@ -54,7 +55,7 @@ Cập nhật: 2026-10-09. Mọi thiết kế và code sau này phải khớp v�
 | ② Không gian | Style + bối cảnh + ánh sáng của cảnh, giống từng chữ ở mọi beat cùng cảnh | Code chép bible |
 | ③ Lúc bắt đầu | Ai ở đâu, đồ vật trạng thái gì | Code từ trạng thái đầu beat |
 | ④ Các shot | `[00:00–00:03]` + câu máy + hành động; "Hard cut to" giữa các shot | Code (mốc giây, máy) + AI (dịch hành động) |
-| ⑤ Âm thanh | Ambient / Music / Dialogue | Code ghép, AI dịch |
+| ⑤ Âm thanh | Ambient / Music / Dialogue (kèm giọng nhân vật chép từ bible) | Code ghép, AI dịch |
 | ⑥ Giữ đúng | Số shot, 2–3 điều riêng của beat, không phụ đề | Code |
 
 - Beat một shot: thêm "in a single continuous shot with no scene cuts" (Omni tự cắt nếu không dặn).
