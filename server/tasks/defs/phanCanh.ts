@@ -149,7 +149,7 @@ export const phanCanh: TaskDef<PhanCanhInput, Record<string, PhanCanhBeat>> = {
       const dung = new Set<string>();
       const shots = arr(r ? r.shots : []).map((raw) => {
         const s = parseShots([raw])[0];
-        const ma = str(obj(raw).ma, 30).toUpperCase();
+        const ma = str(obj(raw).ma, 30).toUpperCase().replace(/[^A-Z0-9.]/g, '');
         const id = cu.has(ma) && !dung.has(ma) ? ma : '';
         if (id) dung.add(id);
         return { ...s, id, thoai: s.thoai.map((n) => n - 1).filter((n) => n >= 0) };

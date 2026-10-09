@@ -83,11 +83,20 @@ export default function PhanCanhScreen({ project, onUpdate, onGo }: Props) {
       return { canh: { ...x.canh, [canhId]: { beats, dauVao: dauVaoPhanCanh(k, canhId), updatedAt: Date.now() } } };
     });
 
-  const vanDung = (canhId: string) =>
+  const vanDung = (canhId: string) => {
+    // Báo những gì sẽ bị gỡ (câu thoại / tag không còn trong beat) — thoại có thể đã đổi vị trí ở màn 4
+    const cur = latestRef.current.sections.phanCanh?.data.canh[canhId];
+    const k0 = latestRef.current.sections.kichBan!.data;
+    if (cur) {
+      const truoc = Object.values(cur.beats).reduce((n, b) => n + b.shots.reduce((m, s) => m + s.thoai.length + s.trongKhung.length, 0), 0);
+      const sau = Object.values(donShot(k0, canhId, cur).beats).reduce((n, b) => n + b.shots.reduce((m, s) => m + s.thoai.length + s.trongKhung.length, 0), 0);
+      if (truoc > sau) notify(`Đã gỡ ${truoc - sau} câu thoại / tag không còn trong beat. Thoại của beat có thể đã đổi thứ tự ở màn 4 — kiểm tra lại thoại từng shot của cảnh này.`, 'Kiểm tra thoại');
+    }
     edit((x) => {
       const k = latestRef.current.sections.kichBan!.data;
       return x.canh[canhId] ? { canh: { ...x.canh, [canhId]: { ...donShot(k, canhId, x.canh[canhId]), dauVao: dauVaoPhanCanh(k, canhId) } } } : x;
     });
+  };
 
   /* ---------- AI ---------- */
 

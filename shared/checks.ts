@@ -582,7 +582,7 @@ export function checkBible(b: BibleData, ctx: BibleCtx): CheckResult {
 
 const ANH_SANG_RE = /(ánh sáng|ánh đèn|đèn tuýp|đèn bàn|nắng|ngược sáng|tối om|sáng rực)/i;
 /** Nói không cần thấy mặt (qua điện thoại, giọng đọc…). */
-const GIONG_NGOAI_RE = /(điện thoại|qua loa|giọng đọc|lồng tiếng|tin nhắn thoại|đọc thư|qua thư|ngoài khung|ngoài hình)/i;
+const GIONG_NGOAI_RE = /(điện thoại|loa phóng thanh|loa phát thanh|giọng đọc|lồng tiếng|tin nhắn thoại|đọc thư|qua thư|ngoài khung|ngoài hình)/i;
 
 export interface PhanCanhCtx {
   /** Mọi tên và tag địa điểm (để cảnh báo ô Mô tả tả lại bối cảnh) */
@@ -595,7 +595,7 @@ export function checkPhanCanhCanh(beats: Beat[], pc: PhanCanhCanh | undefined, c
   const warnings: string[] = [];
   const theoBeat: Record<string, CheckResult> = {};
   // Tên địa điểm so cả dấu (tránh "cho" khớp "Chợ"); tag chỉ khi viết dạng @tag
-  const ten = ctx.diaDiem.filter((x) => !/^[a-z0-9]+$/.test(x)).map((x) => x.toLowerCase().trim()).filter((x) => x.length >= 3);
+  const ten = ctx.diaDiem.filter((x) => !/^[a-z0-9]+$/.test(x)).map((x) => x.normalize('NFC').toLowerCase().trim()).filter((x) => x.length >= 3);
   const tags = ctx.diaDiem.filter((x) => /^[a-z0-9]+$/.test(x));
   beats.forEach((b, i) => {
     const e: string[] = [];
@@ -622,7 +622,7 @@ export function checkPhanCanhCanh(beats: Beat[], pc: PhanCanhCanh | undefined, c
       const words = s.thoai.reduce((n, k2) => n + soTu(b.thoai[k2]?.cau || ''), 0);
       if (Number.isFinite(s.giay) && s.giay > 0 && words > CHU_MOI_GIAY * s.giay) w.push(`${L}: thoại ${words} chữ, dài so với ${s.giay}s (nên tối đa khoảng ${Math.floor(CHU_MOI_GIAY * s.giay)} chữ).`);
       if (ANH_SANG_RE.test(s.moTa)) w.push(`${L}: mô tả nhắc ánh sáng ("${ANH_SANG_RE.exec(s.moTa)![0]}") — ánh sáng đã có ở bible, không cần tả lại.`);
-      const m = ` ${s.moTa.toLowerCase().replace(/[.,;:!?…"“”()]/g, ' ')} `;
+      const m = ` ${s.moTa.normalize('NFC').toLowerCase().replace(/[.,;:!?…"“”()]/g, ' ')} `;
       const trung = ten.find((x) => m.includes(` ${x} `)) || tags.find((t) => s.moTa.toLowerCase().includes(`@${t}`));
       if (trung) w.push(`${L}: mô tả nhắc tên địa điểm — bối cảnh đã có ở bible, không cần tả lại.`);
       s.thoai.forEach((k2) => {
