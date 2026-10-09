@@ -2,6 +2,7 @@
 // Mỗi file: "# Tên", đoạn mô tả, các dòng "- **Khoá:** giá trị", rồi các mục "## Tên mục".
 // Mỗi mục được gửi cho đúng màn dùng nó (bảng SECTION_OF_SCREEN).
 import { normName } from '../../shared/checks';
+import { parseKhoangGiay } from '../../shared/kichBan';
 
 export { normName };
 
@@ -97,4 +98,30 @@ export function genreHeader(g: Genre | null): string {
     .map(([k, v]) => `- ${k}: ${v}`)
     .join('\n');
   return `${g.ten}\n${g.moTa}${info ? `\n${info}` : ''}`;
+}
+
+/** Khoảng giây thể loại khuyên cho mỗi beat (dòng "- **Độ dài beat:** 4–8 giây"). */
+export function beatGiayOf(g: Genre | null): [number, number] | null {
+  return g ? parseKhoangGiay(infoOf(g.thongTin, 'Độ dài beat')) : null;
+}
+
+export interface ThangCham {
+  tieuChi: { ten: string; toiDa: number }[];
+  nguong: number;
+}
+
+/** Thang chấm ở mục "Rà soát": dòng "(10 điểm, đạt từ 7)" và bảng "| Tiêu chí | Điểm |". Không đọc được → null. */
+export function thangChamOf(g: Genre | null): ThangCham | null {
+  const text = sectionFor(g, 'raSoat');
+  if (!text) return null;
+  const head = /(\d+)\s*điểm[^)\n]*?đạt từ\s*(\d+)/i.exec(text);
+  const tieuChi: ThangCham['tieuChi'] = [];
+  text.split('\n').forEach((line) => {
+    const cells = line.trim().replace(/^\||\|$/g, '').split('|').map((x) => x.trim());
+    if (cells.length === 2 && /^\d+$/.test(cells[1])) tieuChi.push({ ten: cells[0].replace(/\*\*/g, ''), toiDa: Number(cells[1]) });
+  });
+  if (!tieuChi.length) return null;
+  const tong = tieuChi.reduce((s, x) => s + x.toiDa, 0);
+  const nguong = head ? Math.round((Number(head[2]) * tong) / Number(head[1])) : Math.ceil(tong * 0.7);
+  return { tieuChi, nguong };
 }

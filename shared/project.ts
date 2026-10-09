@@ -13,8 +13,9 @@ export const DEPS: Record<SectionKey, SectionKey[]> = {
   treatment: ['brief', 'nhanVat'],
   kichBan: ['brief', 'nhanVat', 'treatment'],
   raSoat: ['kichBan'],
-  bible: ['brief', 'nhanVat', 'kichBan'],
-  phanCanh: ['kichBan', 'bible'],
+  // Màn ⑥ trở đi đọc kịch bản chốt (sau khi ⑤ duyệt)
+  bible: ['brief', 'nhanVat', 'kichBan', 'raSoat'],
+  phanCanh: ['kichBan', 'raSoat', 'bible'],
   prompt: ['phanCanh', 'bible'],
 };
 
@@ -159,6 +160,158 @@ export interface TreatmentData {
 /** Từ bao nhiêu giây thì mỗi phần phải chia thành phân đoạn. */
 export const PHAN_DOAN_TU_GIAY = 180;
 
+/* ============================ MÀN ④ — KỊCH BẢN ============================ */
+
+/** Một dòng trạng thái: một người hoặc một vật (vị trí + tình trạng). */
+export interface DongTrangThai {
+  tag: string;
+  moTa: string;
+}
+
+export interface CanhDanY {
+  /** Mã cố định: S1, S2… (không đánh lại số khi chèn / xoá) */
+  id: string;
+  /** id phần của treatment (P1…) */
+  phan: string;
+  diaDiem: string;
+  tagDiaDiem: string;
+  thoiDiem: string;
+  /** Ánh sáng, tiếng Việt (màn ⑥ chuyển thành mô tả cố định) */
+  anhSang: string;
+  /** Đầu cảnh thế nào → cuối cảnh thế nào */
+  chuyenBien: string;
+  /** Tag nhân vật có mặt */
+  coMat: string[];
+  batDau: number;
+  ketThuc: number;
+  dauCanh: DongTrangThai[];
+  cuoiCanh: DongTrangThai[];
+}
+
+/** Dòng Cài – Dùng của treatment đặt vào cảnh. id = id dòng ở treatment (C1…); cai / dung = id cảnh. */
+export interface CaiDungCanh {
+  id: string;
+  cai: string;
+  dung: string;
+}
+
+export interface DanY {
+  canh: CanhDanY[];
+  caiDung: CaiDungCanh[];
+}
+
+export interface ThoaiCau {
+  /** Tag nhân vật, hoặc tên người không có ở màn ② (người qua đường…) */
+  ai: string;
+  cachNoi: string;
+  cau: string;
+}
+
+export interface DaoCu {
+  tag: string;
+  moTa: string;
+}
+
+export interface ThayDoi {
+  tag: string;
+  truoc: string;
+  sau: string;
+}
+
+export interface Beat {
+  /** Mã cố định: B001… (không đánh lại số, không dùng lại số đã xoá) */
+  id: string;
+  giay: number;
+  hanhDong: string;
+  thoai: ThoaiCau[];
+  amThanh: string;
+  camXuc: string;
+  /** Tag người / vật có mặt */
+  coMat: string[];
+  /** Đạo cụ xuất hiện lần đầu ở beat này */
+  daoCuMoi: DaoCu[];
+  thayDoi: ThayDoi[];
+  /** id dòng Cài – Dùng thể hiện ở beat này */
+  caiDung: string[];
+  /** Trạng thái cuối beat. Trạng thái đầu beat do code lấy từ cuối beat trước. */
+  cuoiBeat: DongTrangThai[];
+}
+
+export interface CanhViet {
+  beats: Beat[];
+  /** Dấu "đầu vào" lúc viết (dòng dàn ý + trạng thái cuối cảnh trước). Đổi → cảnh cần xem lại. */
+  dauVao: string;
+  updatedAt: number;
+}
+
+export interface KichBanData {
+  danY: DanY;
+  /** Dàn ý đã được duyệt riêng (mới viết beat được) */
+  danYDuyet: boolean;
+  /** Beat của từng cảnh, theo id cảnh */
+  canh: Record<string, CanhViet>;
+  /** Số tiếp theo cho mã cảnh / beat — chỉ tăng */
+  soCanh: number;
+  soBeat: number;
+}
+
+/** Mỗi beat 3–10 giây (một lần tạo video trên Omni Flash). */
+export const BEAT_MIN = 3;
+export const BEAT_MAX = 10;
+
+/* ============================ MÀN ⑤ — RÀ SOÁT ============================ */
+
+export type MucVanDe = 'cao' | 'vua' | 'thap';
+/** chua: chưa quyết · nhan: nhận, chờ sửa · da-sua: đã sửa · bo: bỏ qua */
+export type XuLy = 'chua' | 'nhan' | 'da-sua' | 'bo';
+
+export const LOAI_VAN_DE = ['nhân quả', 'cài – dùng', 'nhịp', 'thời lượng', 'thoại', 'khó với AI video', 'đúng thể loại', 'khác'] as const;
+
+export interface DiemTieuChi {
+  ten: string;
+  toiDa: number;
+  diem: number;
+  nhanXet: string;
+}
+
+export interface VanDe {
+  id: string;
+  loai: string;
+  muc: MucVanDe;
+  /** id cảnh liên quan */
+  canh: string[];
+  /** id beat liên quan */
+  beat: string[];
+  moTa: string;
+  deXuat: string;
+  /** Cần thêm / bớt cảnh hoặc đổi giây của cảnh → không sửa tự động */
+  canSuaDanY: boolean;
+  xuLy: XuLy;
+  lyDo: string;
+}
+
+/** Bản viết lại một cảnh theo đề xuất, chờ người dùng nhận. */
+export interface BanSua {
+  canhId: string;
+  vanDe: string[];
+  beats: Beat[];
+  /** Dấu các beat gốc lúc gửi AI — đổi nghĩa là cảnh đã được sửa ở màn ④ trong lúc chờ */
+  goc: string;
+  errors: string[];
+  warnings: string[];
+}
+
+export interface RaSoatData {
+  diem: DiemTieuChi[];
+  /** Điểm đạt (từ thang của thể loại) */
+  nguong: number;
+  nhanXet: string;
+  vanDe: VanDe[];
+  banSua: BanSua[];
+  /** Các vấn đề đã bỏ qua, giữ qua các lần rà lại */
+  daBoQua: { moTa: string; lyDo: string; at: number }[];
+}
+
 /* ============================ DỰ ÁN ============================ */
 
 /** Dữ liệu tạm của bước Nhân vật & đạo cụ cũ — dùng tạm ở màn ⑥ cho tới lượt 3. */
@@ -184,6 +337,8 @@ export interface Project {
     brief?: Section<Brief>;
     nhanVat?: Section<NhanVatData>;
     treatment?: Section<TreatmentData>;
+    kichBan?: Section<KichBanData>;
+    raSoat?: Section<RaSoatData>;
   };
   thietKeTam: ThietKeTam;
 }

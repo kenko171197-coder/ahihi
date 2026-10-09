@@ -59,4 +59,6 @@ export interface GenreInfo {
   thoiLuong: string;
   tiLe: string;
   cacPhan: string[];
+  /** Khoảng giây thể loại khuyên cho mỗi beat */
+  beatGiay?: [number, number] | null;
 }

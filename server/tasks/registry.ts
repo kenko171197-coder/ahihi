@@ -3,10 +3,15 @@ import type { TaskDef } from './framework';
 import { hoiLai, logline } from './defs/brief';
 import { nhanVat } from './defs/nhanVat';
 import { treatment } from './defs/treatment';
+import { danYCanh, vietCanh } from './defs/kichBan';
+import { raSoat } from './defs/raSoat';
 
 export const TASK_DEFS: Record<string, TaskDef<any, any>> = {
   [hoiLai.id]: hoiLai,
   [logline.id]: logline,
   [nhanVat.id]: nhanVat,
   [treatment.id]: treatment,
+  [danYCanh.id]: danYCanh,
+  [vietCanh.id]: vietCanh,
+  [raSoat.id]: raSoat,
 };

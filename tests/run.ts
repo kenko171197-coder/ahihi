@@ -9,6 +9,14 @@ import { TASK_DEFS } from '../server/tasks/registry';
 import { hoiLai, logline } from '../server/tasks/defs/brief';
 import { nhanVat } from '../server/tasks/defs/nhanVat';
 import { treatment } from '../server/tasks/defs/treatment';
+import { danYCanh, vietCanh } from '../server/tasks/defs/kichBan';
+import { raSoat, normLoai, normMuc } from '../server/tasks/defs/raSoat';
+import { beatGiayOf, thangChamOf } from '../server/tasks/genre';
+import { checkDanY, checkCanh, canhCtx, checkKichBan, checkRaSoat, raSoatBlocking, tongDiem } from '../shared/checks';
+import {
+  emptyKichBan, ghiCanh, suaCanh, tinhTrangCanh, dauBeat, daoCuTruoc, ganMaBeat, parseTrangThai, trangThaiText, beatId, normCanhId, normBeatId,
+} from '../shared/kichBan';
+import type { DanY, Beat, KichBanData, RaSoatData } from '../shared/project';
 import { checkTreatment, checkCharacters, normName, sentenceCount as sc2 } from '../shared/checks';
 import { normVai } from '../server/tasks/defs/nhanVat';
 import {
@@ -65,6 +73,52 @@ function goodTreatment(total: number, seq = false): TreatmentData {
   };
 }
 
+/** Dàn ý hợp lệ cho phim 60s, khớp goodTreatment(60): P1 0–12, P2 12–30, P3 30–51, P4 51–60. */
+function goodDanY(): DanY {
+  const st = (moTa: string) => [{ tag: 'lan', moTa }];
+  const mk = (id: string, phan: string, batDau: number, ketThuc: number, dau: string, cuoi: string) => ({
+    id, phan, diaDiem: 'Phòng trọ của Lan', tagDiaDiem: 'phongtro', thoiDiem: 'khuya', anhSang: 'đèn tuýp trắng', chuyenBien: 'a → b', coMat: ['lan'], batDau, ketThuc, dauCanh: st(dau), cuoiCanh: st(cuoi),
+  });
+  return {
+    canh: [mk('S1', 'P1', 0, 12, 'đứng ở cửa', 'nằm trên giường'), mk('S2', 'P2', 12, 30, 'nằm trên giường', 'ngồi cạnh thùng'), mk('S3', 'P3', 30, 51, 'ngồi cạnh thùng', 'ngồi ăn'), mk('S4', 'P4', 51, 60, 'ngồi ăn', 'ngồi ăn')],
+    caiDung: [{ id: 'C1', cai: 'S1', dung: 'S3' }],
+  };
+}
+
+let beatSeq = 0;
+/** Các beat hợp lệ cho một cảnh: chia đều giây (mỗi beat 3–10s), beat cuối chép trạng thái cuối cảnh. */
+function beatsFor(c: DanY['canh'][number], start = 1, caiDung: string[] = []): Beat[] {
+  const len = c.ketThuc - c.batDau;
+  const n = Math.max(1, Math.ceil(len / 8));
+  const base = Math.floor(len / n);
+  return Array.from({ length: n }, (_, i) => ({
+    id: beatId(start + i),
+    giay: i === n - 1 ? len - base * (n - 1) : base,
+    hanhDong: `Lan làm việc ${++beatSeq}.`,
+    thoai: [],
+    amThanh: 'quạt trần',
+    camXuc: 'chậm',
+    coMat: ['lan'],
+    daoCuMoi: [],
+    thayDoi: [],
+    caiDung: i === 0 ? caiDung : [],
+    cuoiBeat: i === n - 1 ? c.cuoiCanh : [{ tag: 'lan', moTa: `bước ${i}` }],
+  }));
+}
+
+/** Kịch bản viết đủ mọi cảnh, đã duyệt dàn ý. */
+function goodKichBan(): KichBanData {
+  let kb: KichBanData = { ...emptyKichBan(), danY: goodDanY(), danYDuyet: true, soCanh: 5 };
+  kb.danY.canh.forEach((c) => {
+    const cd = kb.danY.caiDung.filter((x) => x.cai === c.id || x.dung === c.id).map((x) => x.id);
+    kb = ghiCanh(kb, c.id, beatsFor(c, kb.soBeat, cd), 1);
+  });
+  return kb;
+}
+
+const kbCtx = { total: 60, treatment: goodTreatment(60), nhanVat: chars, mucThoai: 'it' as const, nhacNen: 'ai-de-xuat' as const, beatGiay: [4, 8] as [number, number] };
+const ctxOf = (kb: KichBanData, id: string) => canhCtx(kb.danY, id, { ...kbCtx, daoCuTruoc: daoCuTruoc(kb, id) })!;
+
 /* ---------------- Khuôn prompt ---------------- */
 
 await test('render: biến, khối #, khối ^, bỏ ghi chú', () => {
@@ -79,6 +133,9 @@ await test('mọi file prompt chỉ dùng biến mà tác vụ cung cấp', () =
     logline: { brief: briefInput, cauHoi: [] },
     'nhan-vat': { brief },
     treatment: { brief, nhanVat: chars },
+    'dan-y-canh': { brief, nhanVat: chars, treatment: goodTreatment(60), soCanh: 1 },
+    'viet-canh': { brief, nhanVat: chars, treatment: goodTreatment(60), danY: goodDanY(), canhId: 'S2', canhTruoc: { cuoi: goodDanY().canh[0].cuoiCanh, beats: beatsFor(goodDanY().canh[0], 1) }, daoCuTruoc: [], soBeat: 3 },
+    'ra-soat': { brief, nhanVat: chars, treatment: goodTreatment(60), kichBan: goodKichBan(), daBoQua: ['Cảnh 1 hơi dài'] },
   };
   for (const [id, def] of Object.entries(TASK_DEFS)) {
     const input = def.parseInput(samples[id]);
@@ -358,6 +415,253 @@ await test('kết quả AI ghi phiên bản phần trên lúc BẤM NÚT; phần
   p = { ...p, sections: { ...p.sections, brief: approveSection(p, 'brief', editSection(p.sections.brief!, { ...brief, logline: 'mới' } as any, 3), 4) } };
   p = { ...p, sections: { ...p.sections, nhanVat: freshSection(p, 'nhanVat', { list: chars }, 5, readRevs) } };
   assert.ok(isStale(p, 'nhanVat'), 'phải là đã cũ vì AI đọc brief bản 1');
+});
+
+/* ---------------- Màn ④ — Kịch bản ---------------- */
+
+await test('dàn ý hợp lệ thì không lỗi', () => {
+  const r = checkDanY(goodDanY(), kbCtx);
+  assert.deepEqual(r.errors, []);
+  assert.deepEqual(r.warnings, []);
+});
+
+await test('dàn ý: hở giây, cảnh < 3s, tag địa điểm lệch, nhân vật lạ, cài sau dùng, thiếu Cài – Dùng', () => {
+  const d = goodDanY();
+  d.canh[1].batDau = 13;
+  d.canh[3].batDau = 51;
+  d.canh[2].tagDiaDiem = 'phong2'; // cùng tên, khác tag
+  d.canh[0].coMat = ['lan', 'shipper'];
+  d.canh[0].tagDiaDiem = 'lan'; // trùng tag nhân vật
+  d.caiDung = [{ id: 'C1', cai: 'S3', dung: 'S1' }];
+  const e = checkDanY(d, kbCtx).errors;
+  assert.ok(e.some((x) => x.includes('Cảnh 2 phải bắt đầu đúng lúc')), 'thiếu lỗi hở giây');
+  assert.ok(e.some((x) => x.includes('cùng địa điểm phải cùng tag')), 'thiếu lỗi tag địa điểm');
+  assert.ok(e.some((x) => x.includes('@shipper không có ở màn 2')), 'thiếu lỗi nhân vật lạ');
+  assert.ok(e.some((x) => x.includes('trùng tag nhân vật')), 'thiếu lỗi trùng tag');
+  assert.ok(e.some((x) => x.includes('cảnh cài (3)')), 'thiếu lỗi cài sau dùng');
+  const short = goodDanY();
+  short.canh[3] = { ...short.canh[3], batDau: 51, ketThuc: 60 };
+  short.canh[2] = { ...short.canh[2], ketThuc: 58 };
+  short.canh[3].batDau = 58;
+  assert.ok(checkDanY(short, kbCtx).errors.some((x) => x.includes('ít nhất 3 giây')));
+  const noCd = { ...goodDanY(), caiDung: [] };
+  assert.ok(checkDanY(noCd, kbCtx).errors.some((x) => x.includes('chưa chọn đủ cảnh cài')));
+});
+
+await test('dàn ý: cùng địa điểm liên tiếp mà trạng thái không nối → cảnh báo; nhân vật gián tiếp có mặt → cảnh báo', () => {
+  const d = goodDanY();
+  d.canh[1].dauCanh = [{ tag: 'lan', moTa: 'đứng ở bếp' }];
+  d.canh[2].coMat = ['lan', 'me'];
+  const w = checkDanY(d, kbCtx).warnings;
+  assert.ok(w.some((x) => x.includes('Cảnh 2 cùng địa điểm') && x.includes('@lan')));
+  assert.ok(w.some((x) => x.includes('gián tiếp')));
+});
+
+await test('beat hợp lệ thì không lỗi; trạng thái đầu beat lấy từ cuối beat trước', () => {
+  const kb = goodKichBan();
+  for (const c of kb.danY.canh) {
+    const r = checkCanh(kb.canh[c.id].beats, ctxOf(kb, c.id));
+    assert.deepEqual(r.errors, [], `${c.id}: ${r.errors.join(' | ')}`);
+  }
+  const c = kb.danY.canh[1];
+  const beats = kb.canh[c.id].beats;
+  assert.deepEqual(dauBeat(c, beats, 0), c.dauCanh);
+  assert.deepEqual(dauBeat(c, beats, 1), beats[0].cuoiBeat);
+  assert.deepEqual(checkKichBan(kb, kbCtx).errors, []);
+});
+
+await test('beat: sai tổng giây, beat ngoài 3–10s, tag lạ, đạo cụ trùng, thoại khi brief không thoại, thiếu Cài – Dùng', () => {
+  const kb = goodKichBan();
+  const c = kb.danY.canh[0];
+  const beats: Beat[] = kb.canh[c.id].beats.map((b) => ({ ...b, caiDung: [] }));
+  beats[0] = { ...beats[0], giay: 2, coMat: ['lan', 'conmeo'], daoCuMoi: [{ tag: 'lan', moTa: 'x' }], thoai: [{ ai: 'lan', cachNoi: '', cau: 'Mệt quá.' }] };
+  const r = checkCanh(beats, { ...ctxOf(kb, c.id), mucThoai: 'khong' });
+  assert.ok(r.errors.some((x) => x.includes('Tổng giây các beat')), 'thiếu lỗi tổng giây');
+  assert.ok(r.errors.some((x) => x.includes('mỗi beat 3–10 giây')), 'thiếu lỗi beat ngắn');
+  assert.ok(r.errors.some((x) => x.includes('@conmeo')), 'thiếu lỗi tag lạ');
+  assert.ok(r.errors.some((x) => x.includes('trùng tag nhân vật')), 'thiếu lỗi đạo cụ trùng nhân vật');
+  assert.ok(r.errors.some((x) => x.includes('không thoại')), 'thiếu lỗi thoại');
+  assert.ok(r.errors.some((x) => x.includes('nét chữ của mẹ')), 'thiếu lỗi Cài – Dùng');
+});
+
+await test('beat: cảnh báo thoại dài, ngoài khoảng thể loại, người lạ nói, beat cuối lệch dàn ý', () => {
+  const kb = goodKichBan();
+  const c = kb.danY.canh[1];
+  const beats = kb.canh[c.id].beats.map((b) => ({ ...b }));
+  beats[0] = { ...beats[0], giay: 9, thoai: [{ ai: 'người giao hàng', cachNoi: '', cau: 'Chị ơi có hàng nè chị ơi ra nhận giúp em với nha chị ơi em đứng chờ dưới cổng nãy giờ rồi đó chị xuống lẹ giùm em nha em còn đi giao mấy đơn nữa' }] };
+  beats[1] = { ...beats[1], giay: beats[1].giay - (9 - kb.canh[c.id].beats[0].giay) };
+  beats[beats.length - 1] = { ...beats[beats.length - 1], cuoiBeat: [{ tag: 'lan', moTa: 'đứng ở cửa' }] };
+  const w = checkCanh(beats, ctxOf(kb, c.id)).warnings;
+  assert.ok(w.some((x) => x.includes('nói không kịp')), 'thiếu cảnh báo thoại dài');
+  assert.ok(w.some((x) => x.includes('thể loại khuyên 4–8')), 'thiếu cảnh báo khoảng thể loại');
+  assert.ok(w.some((x) => x.includes('người giao hàng') && x.includes('không có ở màn 2')), 'thiếu cảnh báo người lạ nói');
+  assert.ok(w.some((x) => x.includes('khác trạng thái cuối cảnh')), 'thiếu cảnh báo beat cuối');
+});
+
+await test('đạo cụ: khai ở cảnh trước thì cảnh sau dùng được; khai lại thì lỗi', () => {
+  let kb = goodKichBan();
+  const [c1, c2] = kb.danY.canh;
+  const b1 = kb.canh[c1.id].beats.map((b, i) => (i === 0 ? { ...b, daoCuMoi: [{ tag: 'thungxop', moTa: 'thùng xốp trắng' }], coMat: ['lan', 'thungxop'], cuoiBeat: [...b.cuoiBeat, { tag: 'thungxop', moTa: 'đóng' }] } : b));
+  kb = suaCanh(kb, c1.id, b1, 2);
+  assert.deepEqual(daoCuTruoc(kb, c2.id).map((d) => d.tag), ['thungxop']);
+  const b2 = kb.canh[c2.id].beats.map((b, i) => (i === 0 ? { ...b, coMat: ['lan', 'thungxop'], thayDoi: [{ tag: 'thungxop', truoc: 'đóng', sau: 'mở' }], cuoiBeat: [...b.cuoiBeat, { tag: 'thungxop', moTa: 'mở' }] } : b));
+  assert.deepEqual(checkCanh(b2, ctxOf(kb, c2.id)).errors, []);
+  const again = b2.map((b, i) => (i === 0 ? { ...b, daoCuMoi: [{ tag: 'thungxop', moTa: 'lại' }] } : b));
+  assert.ok(checkCanh(again, ctxOf(kb, c2.id)).errors.some((x) => x.includes('@thungxop đã có')));
+});
+
+await test('cần xem lại: sửa dàn ý một cảnh chỉ cờ cảnh đó; đổi cuối cảnh trước thì cờ cảnh sau; "vẫn đúng" xoá cờ', () => {
+  let kb = goodKichBan();
+  assert.ok(kb.danY.canh.every((c) => tinhTrangCanh(kb, c.id) === 'da-viet'));
+  // Sửa chuyển biến của cảnh 2 (không đổi trạng thái cuối)
+  kb = { ...kb, danY: { ...kb.danY, canh: kb.danY.canh.map((c) => (c.id === 'S2' ? { ...c, chuyenBien: 'khác' } : c)) } };
+  assert.deepEqual(kb.danY.canh.map((c) => tinhTrangCanh(kb, c.id)), ['da-viet', 'can-xem-lai', 'da-viet', 'da-viet']);
+  // "Vẫn đúng": ghi lại dấu đầu vào
+  kb = ghiCanh(kb, 'S2', kb.canh.S2.beats, 3);
+  assert.equal(tinhTrangCanh(kb, 'S2'), 'da-viet');
+  // Sửa tay beat cuối cảnh 2 (đổi trạng thái cuối thật) → cảnh 3 cần xem lại, cảnh 2 thì không
+  const b = kb.canh.S2.beats;
+  kb = suaCanh(kb, 'S2', b.map((x, i) => (i === b.length - 1 ? { ...x, cuoiBeat: [{ tag: 'lan', moTa: 'đứng dậy' }] } : x)), 4);
+  assert.equal(tinhTrangCanh(kb, 'S2'), 'da-viet');
+  assert.equal(tinhTrangCanh(kb, 'S3'), 'can-xem-lai');
+  assert.ok(checkKichBan(kb, kbCtx).errors.some((x) => x.includes('Cảnh 3 cần xem lại')));
+  // Cảnh chưa viết
+  const kb2 = { ...kb, canh: { ...kb.canh } };
+  delete kb2.canh.S4;
+  assert.equal(tinhTrangCanh(kb2, 'S4'), 'chua-viet');
+  assert.ok(checkKichBan(kb2, kbCtx).errors.some((x) => x.includes('Cảnh 4 chưa viết')));
+});
+
+await test('mã beat cố định: không trùng cảnh khác, không dùng lại số đã xoá', () => {
+  let kb = goodKichBan();
+  const all = Object.values(kb.canh).flatMap((v) => v.beats.map((b) => b.id));
+  assert.equal(new Set(all).size, all.length);
+  const before = kb.soBeat;
+  // Xoá beat cuối cảnh 4 rồi thêm beat mới: số mới lớn hơn mọi số cũ
+  const s4 = kb.canh.S4.beats;
+  kb = suaCanh(kb, 'S4', s4.slice(0, -1), 5);
+  const g = ganMaBeat(kb, 'S4', [...kb.canh.S4.beats, { ...s4[0], id: '' }]);
+  assert.equal(g.beats[g.beats.length - 1].id, beatId(before));
+  // Beat AI trả về trùng mã cảnh khác → nhận số mới
+  const clash = ganMaBeat(kb, 'S4', [{ ...s4[0], id: kb.canh.S1.beats[0].id }]);
+  assert.notEqual(clash.beats[0].id, kb.canh.S1.beats[0].id);
+});
+
+await test('trạng thái: đọc / ghi ô chữ, đọc mã cảnh / beat', () => {
+  const lines = parseTrangThai('@lan: ngồi bệt, giữa phòng\nthungxop — mở nắp\nkhông có tag');
+  assert.deepEqual(lines, [{ tag: 'lan', moTa: 'ngồi bệt, giữa phòng' }, { tag: 'thungxop', moTa: 'mở nắp' }]);
+  assert.equal(trangThaiText(lines), '@lan: ngồi bệt, giữa phòng\n@thungxop: mở nắp');
+  assert.equal(normCanhId('Cảnh S 3'), 'S3');
+  assert.equal(normBeatId('b7'), 'B007');
+});
+
+await test('thể loại: đọc độ dài beat và thang chấm', () => {
+  assert.deepEqual(beatGiayOf(genre), [4, 8]);
+  const t = thangChamOf(genre)!;
+  assert.equal(t.tieuChi.length, 5);
+  assert.equal(t.nguong, 7);
+  assert.equal(t.tieuChi[0].toiDa, 2);
+});
+
+await test('tác vụ dàn ý: AI giả → mã cảnh, phần, Cài – Dùng theo số thứ tự; sửa theo yêu cầu giữ mã cũ', async () => {
+  const d = goodDanY();
+  const raw = {
+    canh: d.canh.map((c, i) => ({ ...c, id: undefined, ma: '', phan: i + 1, tagDiaDiem: '@PhongTro', coMat: ['@lan'] })),
+    caiDung: [{ ma: 'c1', canhCai: 1, canhDung: 3 }],
+  };
+  const r = await runTask(danYCanh, { brief, nhanVat: chars, treatment: goodTreatment(60), soCanh: 1 }, 'p1', fakeDeps([raw]));
+  assert.deepEqual(r.errors, []);
+  assert.deepEqual(r.output.canh.map((c) => c.id), ['S1', 'S2', 'S3', 'S4']);
+  assert.equal(r.output.canh[2].phan, 'P3');
+  assert.equal(r.output.canh[0].tagDiaDiem, 'phongtro');
+  assert.deepEqual(r.output.caiDung, [{ id: 'C1', cai: 'S1', dung: 'S3' }]);
+  // Sửa: AI chèn một cảnh mới giữa S1 và S2, giữ mã cũ cho các cảnh khác
+  const raw2 = { canh: [{ ...raw.canh[0], ma: 'S1' }, { ...raw.canh[1], ma: '', ketThuc: 20 }, { ...raw.canh[1], ma: 'S2', batDau: 20 }, { ...raw.canh[2], ma: 'S3' }, { ...raw.canh[3], ma: 'S4' }], caiDung: raw.caiDung };
+  const r2 = await runTask(danYCanh, { brief, nhanVat: chars, treatment: goodTreatment(60), soCanh: 5, sua: { truoc: r.output, yeuCau: 'thêm cảnh' } }, 'p1', fakeDeps([raw2]));
+  assert.deepEqual(r2.output.canh.map((c) => c.id), ['S1', 'S5', 'S2', 'S3', 'S4']);
+});
+
+await test('tác vụ viết cảnh: AI giả → mã beat từ số tiếp theo; sai tổng giây thì gửi lại kèm lỗi', async () => {
+  const d = goodDanY();
+  const c = d.canh[1];
+  const good = beatsFor(c, 1).map((b) => ({ ...b, ma: '', coMat: ['@Lan'] }));
+  const bad = good.map((b, i) => (i === 0 ? { ...b, giay: b.giay + 1 } : b));
+  const input = { brief, nhanVat: chars, treatment: goodTreatment(60), danY: d, canhId: 'S2', canhTruoc: null, daoCuTruoc: [], soBeat: 7 };
+  const deps = fakeDeps([{ beats: bad }, { beats: good }]);
+  const r = await runTask(vietCanh, input, 'p1', deps);
+  assert.deepEqual(r.errors, []);
+  assert.equal(r.output[0].id, 'B007');
+  assert.deepEqual(r.output[0].coMat, ['lan']);
+  assert.ok(deps.prompts[1].includes('Tổng giây các beat'));
+  assert.ok(deps.prompts[0].includes('Tổng giây các beat PHẢI bằng đúng 18 giây'));
+});
+
+await test('prompt viết cảnh: brief không thoại / không nhạc thì dặn rõ; có Cài – Dùng thì liệt kê', () => {
+  const tpl = fs.readFileSync(path.join(ROOT, 'prompts/04b-viet-canh.md'), 'utf8');
+  const b2 = { ...brief, thoai: { mucDo: 'khong', ngonNgu: '' }, nhacNen: 'khong' };
+  const input = vietCanh.parseInput({ brief: b2, nhanVat: chars, treatment: goodTreatment(60), danY: goodDanY(), canhId: 'S1', canhTruoc: null, daoCuTruoc: [], soBeat: 1 });
+  const out = render(tpl, vietCanh.vars(input, { genre }));
+  assert.ok(out.includes('KHÔNG THOẠI'));
+  assert.ok(out.includes('KHÔNG NHẠC NỀN'));
+  assert.ok(out.includes('C1 "nét chữ của mẹ": cài ở cảnh này'));
+  assert.ok(out.includes('Đây là cảnh mở đầu phim'));
+});
+
+/* ---------------- Màn ⑤ — Rà soát ---------------- */
+
+const diemRaw = [1, 2, 3, 4, 5].map((k) => ({ tieuChi: k, diem: 1.6, nhanXet: 'ổn' }));
+
+await test('tác vụ rà soát: code tự cộng điểm theo thang thể loại; beat kéo theo cảnh; mã lạ thì lỗi', async () => {
+  const kb = goodKichBan();
+  const b = kb.canh.S3.beats[0].id;
+  const raw = {
+    diem: diemRaw,
+    nhanXet: 'Ổn.',
+    vanDe: [
+      { loai: 'Cài-dùng', muc: 'Cao', canh: [], beat: [b.toLowerCase()], moTa: 'Mẩu giấy xuất hiện mà không nhìn rõ.', deXuat: 'Cho Lan cầm mẩu giấy lên.', canSuaDanY: false },
+      { loai: 'nhịp', muc: 'thấp', canh: ['S9'], beat: [], moTa: 'x', deXuat: 'y', canSuaDanY: false },
+    ],
+  };
+  const r = await runTask(raSoat, { brief, nhanVat: chars, treatment: goodTreatment(60), kichBan: kb, daBoQua: [] }, 'p1', fakeDeps([raw, raw, raw]));
+  assert.equal(r.output.diem.length, 5);
+  assert.equal(r.output.diem[0].diem, 1.5, 'điểm làm tròn 0,5');
+  assert.equal(tongDiem(r.output), 7.5);
+  assert.equal(r.output.nguong, 7);
+  assert.deepEqual(r.output.vanDe[0].canh, ['S3']);
+  assert.equal(r.output.vanDe[0].loai, 'cài – dùng');
+  assert.equal(r.output.vanDe[0].muc, 'cao');
+  assert.ok(r.errors.some((e) => e.includes('không có cảnh S9')));
+});
+
+await test('rà soát: kiểm điểm ngoài thang, thiếu đề xuất; dưới ngưỡng chỉ cảnh báo; cổng duyệt chặn vấn đề cao', () => {
+  const base: RaSoatData = {
+    diem: [{ ten: 'a', toiDa: 2, diem: 3, nhanXet: 'x' }, { ten: 'b', toiDa: 8, diem: 2, nhanXet: 'x' }],
+    nguong: 7, nhanXet: '', banSua: [], daBoQua: [],
+    vanDe: [{ id: 'V1', loai: 'nhịp', muc: 'cao', canh: ['S1'], beat: [], moTa: 'm', deXuat: '', canSuaDanY: false, xuLy: 'chua', lyDo: '' }],
+  };
+  const r = checkRaSoat(base, { canhIds: ['S1'], beatIds: [], soTieuChi: 2 });
+  assert.ok(r.errors.some((e) => e.includes('ngoài thang')));
+  assert.ok(r.errors.some((e) => e.includes('chưa có đề xuất')));
+  assert.ok(r.warnings.some((e) => e.includes('dưới mức đạt')));
+  assert.equal(raSoatBlocking(base).length, 1);
+  assert.equal(raSoatBlocking({ ...base, vanDe: [{ ...base.vanDe[0], xuLy: 'bo' }] }).length, 0);
+  assert.equal(raSoatBlocking({ ...base, vanDe: [{ ...base.vanDe[0], xuLy: 'nhan' }] }).length, 1, 'đã nhận nhưng chưa sửa vẫn chặn');
+  assert.equal(raSoatBlocking({ ...base, vanDe: [{ ...base.vanDe[0], muc: 'vua' }] }).length, 0);
+});
+
+await test('rà soát: đọc loại / mức nhiều cách viết', () => {
+  assert.equal(normLoai('Khó cho AI'), 'khó với AI video');
+  assert.equal(normLoai('Nhân quả'), 'nhân quả');
+  assert.equal(normLoai('lạ'), 'khác');
+  assert.equal(normMuc('HIGH'), 'cao');
+  assert.equal(normMuc('Thấp'), 'thap');
+  assert.equal(normMuc(''), 'vua');
+});
+
+await test('màn ⑥ ⑦ dựa trên ⑤: ⑤ chưa duyệt thì ⑥ bị khoá', () => {
+  const p: Project = newProjectData('p1', 1);
+  assert.ok(missingDeps(p, 'bible').includes('raSoat'));
+  assert.ok(missingDeps(p, 'phanCanh').includes('raSoat'));
 });
 
 /* ---------------- Kết quả ---------------- */
