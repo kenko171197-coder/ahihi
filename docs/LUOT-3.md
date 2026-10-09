@@ -1,4 +1,4 @@
-# Lượt 3 — Màn ⑥ Bible & tham chiếu (ĐÃ DUYỆT 2026-10-09) · Màn ⑦ Phân cảnh (thiết kế sau)
+# Lượt 3 — Màn ⑥ Bible & tham chiếu · Màn ⑦ Phân cảnh (ĐÃ DUYỆT 2026-10-09)
 
 Lượt 3 chia hai phần: **3a = màn ⑥** (làm trước, người dùng thử), **3b = màn ⑦** (trình bày thiết kế sau khi 3a xong).
 
@@ -49,4 +49,30 @@ Duyệt khi có style, mọi mục có phần cố định, không lỗi, khớp
 
 ## Màn ⑦ — Phân cảnh
 
-Thiết kế sau khi người dùng thử xong màn ⑥.
+Mỗi beat chia thành các shot. **Một beat vẫn là một lần tạo video**; các shot nối bằng "Hard cut to" ở màn ⑧. Đọc kịch bản chốt (⑤) và bible (⑥).
+
+### Mỗi shot
+
+| Ô | Ai điền |
+|---|---|
+| Số giây — bước 0,5 (1,5 giây được), tối thiểu 1 giây | AI đề xuất, người dùng sửa |
+| Mốc giây `[00:00–00:01.5]` | Code tính |
+| Cỡ cảnh · góc máy · chuyển động máy — chọn trong danh sách cố định, mỗi mục có sẵn câu tiếng Anh (code ghép câu máy cho ⑧) | AI chọn, người dùng sửa |
+| **Mô tả** tiếng Việt — nguồn duy nhất cho câu hành động ở ⑧; không tả bối cảnh, ánh sáng, ngoại hình (code chép từ bible) | AI viết, người dùng sửa |
+| Trong khung — tag người / vật có mặt ở beat | AI chọn |
+| Thoại — câu nào của beat nói trong shot; shot ngắn thường một câu, shot dài được nhiều câu; mỗi câu thuộc đúng một shot | AI gán |
+
+Danh sách: **cỡ cảnh** toàn cảnh, toàn trung, trung cảnh, cận trung, cận cảnh, đặc tả · **góc máy** ngang tầm mắt, máy thấp, máy cao, từ trên xuống, qua vai, góc nhìn nhân vật · **chuyển động** máy tĩnh, lia ngang, lia dọc, đẩy vào, kéo ra, đi theo, cầm tay nhẹ.
+
+**Số shot không giới hạn:** tuỳ tình tiết trong beat và ý đồ đạo diễn.
+
+### Tác vụ `phan-canh` (một lần mỗi cảnh; "Phân cảnh tất cả" chạy lần lượt, dừng ở cảnh còn lỗi)
+
+Đọc: brief (khung dọc / ngang), mục *Cách quay* của thể loại, dòng dàn ý của cảnh, các beat (trạng thái đầu / cuối, thoại đánh số), mục *Cách quay* của thể loại.
+
+**Code kiểm — lỗi:** mọi beat có ít nhất một shot; tổng giây các shot = giây của beat; mỗi shot ≥ 1 giây, bước 0,5; có mô tả; cỡ / góc / chuyển động thuộc danh sách; trong khung ⊂ có mặt của beat; mỗi câu thoại thuộc đúng một shot.
+**Cảnh báo:** shot dưới 1,5 giây; thoại quá dài so với giây của shot (khoảng 3 chữ / giây); mô tả nhắc ánh sáng hoặc tên địa điểm; người nói (có tag) không ở trong khung shot đó, trừ khi nói qua điện thoại / giọng.
+
+**Hiển thị:** mỗi cảnh một bảng, mỗi beat các dòng shot; sửa tay, thêm / xoá / tách shot, mốc giây tự tính lại. Cờ **"cần xem lại" theo cảnh** (beat của cảnh đổi ở ④ ⑤) + "Vẫn đúng".
+
+**Duyệt ⑦:** mọi beat có shot, không lỗi, không cảnh nào "cần xem lại".
