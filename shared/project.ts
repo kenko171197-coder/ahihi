@@ -286,6 +286,8 @@ export interface VanDe {
   deXuat: string;
   /** Cần thêm / bớt cảnh hoặc đổi giây của cảnh → không sửa tự động */
   canSuaDanY: boolean;
+  /** Các cảnh của vấn đề đã nhận bản sửa — đủ hết mới là "đã sửa" */
+  daSuaCanh: string[];
   xuLy: XuLy;
   lyDo: string;
 }
@@ -297,6 +299,8 @@ export interface BanSua {
   beats: Beat[];
   /** Dấu các beat gốc lúc gửi AI — đổi nghĩa là cảnh đã được sửa ở màn ④ trong lúc chờ */
   goc: string;
+  /** Dấu đầu vào của cảnh lúc gửi AI (cảnh trước đổi sau đó → cảnh hiện "cần xem lại") */
+  dauVao: string;
   errors: string[];
   warnings: string[];
 }

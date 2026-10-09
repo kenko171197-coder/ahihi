@@ -49,6 +49,10 @@ export default function KichBanScreen({ project, onUpdate, onGo }: Props) {
   const [dangViet, setDangViet] = useState<{ id: string; kind: 'viet' | 'sua' } | null>(null);
   const [tienDo, setTienDo] = useState('');
   const stopRef = useRef(false);
+  // Rời màn khi "Viết tất cả" đang chạy → dừng sau cảnh đang viết (không chạy ngầm)
+  useEffect(() => () => {
+    stopRef.current = true;
+  }, []);
 
   if (missingDeps(project, 'kichBan').length) return <LockedScreen project={project} sectionKey="kichBan" onGo={onGo} />;
   const blocked = blockedDeps(project, 'kichBan').length > 0;
@@ -238,7 +242,8 @@ export default function KichBanScreen({ project, onUpdate, onGo }: Props) {
   const scenes = kb?.danY.canh || [];
   const daViet = scenes.filter((c) => tinhTrangCanh(kb!, c.id) !== 'chua-viet').length;
   const giayDaViet = scenes.reduce((s, c) => s + tongGiayBeat(beatsOf(kb!, c.id)), 0);
-  const aiOff = !!busy || blocked || stale || genres === null;
+  // Màn trên đã đổi (đã cũ) chỉ là cảnh báo: vẫn viết tiếp được, để không phải tạo lại cả dàn ý
+  const aiOff = !!busy || blocked || genres === null;
   const phanTen = (id: string) => {
     const i = treatment.phan.findIndex((p) => p.id === id);
     return i >= 0 ? `Phần ${i + 1}. ${treatment.phan[i].ten}` : 'chưa chọn phần';
@@ -338,7 +343,7 @@ export default function KichBanScreen({ project, onUpdate, onGo }: Props) {
                   <button onClick={() => setBuoc('A')} className="px-4 py-2 rounded-full bg-black text-primary-400 font-bold">Sang bước A</button>
                 </div>
               )}
-              {stale && <p className="text-sm text-amber-900">Màn phía trên đã đổi sau khi tạo dàn ý — tạo lại hoặc giữ nguyên (thanh ở cuối màn) trước khi viết tiếp.</p>}
+              {stale && <p className="text-sm text-amber-900">Màn phía trên đã đổi sau khi tạo dàn ý. Bạn vẫn viết tiếp được; kiểm tra dàn ý còn đúng không, viết xong thì bấm "Giữ nguyên và duyệt lại" (hoặc tạo lại dàn ý) ở cuối màn.</p>}
 
               <div className="bg-white border border-gray-200 rounded-2xl p-4 space-y-3">
                 <div className="flex flex-wrap items-center justify-between gap-3">
@@ -356,7 +361,7 @@ export default function KichBanScreen({ project, onUpdate, onGo }: Props) {
                         <Square className="w-4 h-4" /> Dừng sau cảnh này
                       </button>
                     ) : null}
-                    <RunButton onClick={writeAll} busy={busy === 'tat-ca'} busyLabel={tienDo || 'AI đang viết…'} icon={Clapperboard} disabled={aiOff || !kb.danYDuyet || daViet === scenes.length}>
+                    <RunButton onClick={writeAll} busy={busy === 'tat-ca'} busyLabel={tienDo ? `${tienDo} Đừng rời màn này.` : 'AI đang viết…'} icon={Clapperboard} disabled={aiOff || !kb.danYDuyet || daViet === scenes.length}>
                       Viết tất cả cảnh chưa viết
                     </RunButton>
                   </div>

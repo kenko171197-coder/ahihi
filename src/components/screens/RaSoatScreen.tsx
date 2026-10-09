@@ -5,7 +5,7 @@ import { SearchCheck, RefreshCw, ArrowRight, Check, X, Undo2, Wand2 } from 'luci
 import type { Project, ProjectPatch, SectionKey, Section, GenreInfo, RaSoatData, VanDe, BanSua, Beat, KichBanData } from '../../types';
 import { freshSection, editSection, approveSection, keepSection, missingDeps, blockedDeps, depRevs, isStale } from '../../../shared/project';
 import { checkKichBan, checkCanh, canhCtx, checkRaSoat, raSoatBlocking, tongDiem, diemToiDa } from '../../../shared/checks';
-import { beatsOf, ghiCanh, hash, daoCuTruoc, viTriCanh } from '../../../shared/kichBan';
+import { beatsOf, ghiCanh, hash, daoCuTruoc, viTriCanh, dauVaoCanh } from '../../../shared/kichBan';
 import { runTask, getGenres } from '../../services/api';
 import { kichBanCtx, vietCanhInput } from '../../lib/kichBanInput';
 import { askConfirm, notify } from '../../lib/dialog';
@@ -33,9 +33,11 @@ function yeuCauSua(list: VanDe[]): string {
 }
 
 function IssueCard({
-  v, no, sceneLabel, onSet, onGoDanY,
+  v, no, sceneLabel, onSet, onGoDanY, disabled,
 }: {
   v: VanDe;
+  /** AI đang chạy → không đổi quyết định (tránh bị kết quả mới ghi đè) */
+  disabled: boolean;
   no: number;
   sceneLabel: (id: string) => string;
   onSet: (patch: Partial<VanDe>) => void;
@@ -44,7 +46,7 @@ function IssueCard({
   const [skipping, setSkipping] = useState(false);
   const [lyDo, setLyDo] = useState('');
   const m = MUC[v.muc] || MUC.vua;
-  const small = 'px-3 py-1.5 rounded-full text-sm font-bold flex items-center gap-1.5';
+  const small = 'px-3 py-1.5 rounded-full text-sm font-bold flex items-center gap-1.5 disabled:opacity-50';
   return (
     <article className={`bg-white border rounded-2xl p-4 space-y-2 ${v.xuLy === 'bo' || v.xuLy === 'da-sua' ? 'border-gray-100 opacity-70' : 'border-gray-200'}`} aria-label={`Vấn đề ${no}`}>
       <div className="flex flex-wrap items-center gap-2 text-xs">
@@ -69,16 +71,16 @@ function IssueCard({
               <button onClick={onGoDanY} className={`${small} bg-black text-primary-400`}>
                 Sang màn 4 sửa dàn ý <ArrowRight className="w-4 h-4" />
               </button>
-              <button onClick={() => onSet({ xuLy: 'da-sua' })} className={`${small} bg-gray-100 hover:bg-primary-100`}>
+              <button disabled={disabled} onClick={() => onSet({ xuLy: 'da-sua' })} className={`${small} bg-gray-100 hover:bg-primary-100`}>
                 <Check className="w-4 h-4" /> Tôi đã sửa
               </button>
             </>
           ) : (
-            <button onClick={() => onSet({ xuLy: 'nhan' })} className={`${small} bg-black text-primary-400`}>
+            <button disabled={disabled} onClick={() => onSet({ xuLy: 'nhan' })} className={`${small} bg-black text-primary-400`}>
               <Check className="w-4 h-4" /> Nhận đề xuất
             </button>
           )}
-          <button onClick={() => setSkipping(true)} className={`${small} bg-gray-100 hover:bg-red-50`}>
+          <button disabled={disabled} onClick={() => setSkipping(true)} className={`${small} bg-gray-100 hover:bg-red-50`}>
             <X className="w-4 h-4" /> Bỏ qua
           </button>
         </div>
@@ -86,7 +88,7 @@ function IssueCard({
       {v.xuLy === 'chua' && skipping && (
         <div className="flex flex-col sm:flex-row gap-2 pt-1">
           <input value={lyDo} onChange={(e) => setLyDo(e.target.value)} placeholder="Lý do bỏ qua (tuỳ chọn) — app ghi lại" aria-label="Lý do bỏ qua" className={`${fieldCls} flex-1`} />
-          <button onClick={() => onSet({ xuLy: 'bo', lyDo: lyDo.trim() })} className={`${small} bg-black text-primary-400 justify-center`}>
+          <button disabled={disabled} onClick={() => onSet({ xuLy: 'bo', lyDo: lyDo.trim() })} className={`${small} bg-black text-primary-400 justify-center`}>
             Xác nhận bỏ qua
           </button>
           <button onClick={() => setSkipping(false)} className={`${small} bg-gray-100 justify-center`}>
@@ -101,7 +103,7 @@ function IssueCard({
             {v.xuLy === 'bo' && v.lyDo ? `: ${v.lyDo}` : ''}
           </span>
           {v.xuLy !== 'da-sua' && (
-            <button onClick={() => onSet({ xuLy: 'chua', lyDo: '' })} className={`${small} bg-gray-100 hover:bg-primary-100`}>
+            <button disabled={disabled} onClick={() => onSet({ xuLy: 'chua', lyDo: '' })} className={`${small} bg-gray-100 hover:bg-primary-100`}>
               <Undo2 className="w-4 h-4" /> {v.xuLy === 'nhan' ? 'Huỷ nhận' : 'Mở lại'}
             </button>
           )}
@@ -137,7 +139,8 @@ export default function RaSoatScreen({ project, onUpdate, onGo }: Props) {
         { canhIds: kb.danY.canh.map((c) => c.id), beatIds: Object.values(kb.canh).flatMap((v) => v.beats.map((b) => b.id)), soTieuChi: data.diem.length }
       )
     : { errors: [], warnings: [] };
-  const blocking = data ? [...raSoatBlocking(data), ...check.errors] : [];
+  // Cổng duyệt theo thiết kế: chỉ vấn đề mức "cao" chưa xử lý và bản sửa chờ nhận. Lỗi khác của kết quả AI chỉ báo.
+  const blocking = data ? raSoatBlocking(data) : [];
   const sceneLabel = (id: string) => {
     const i = viTriCanh(kb.danY, id);
     return i >= 0 ? `Cảnh ${i + 1}` : id;
@@ -153,7 +156,9 @@ export default function RaSoatScreen({ project, onUpdate, onGo }: Props) {
   const setVanDe = (id: string, patch: Partial<VanDe>) =>
     edit((r) => {
       const v = r.vanDe.find((x) => x.id === id);
-      const daBoQua = patch.xuLy === 'bo' && v ? [...r.daBoQua, { moTa: v.moTa, lyDo: patch.lyDo || '', at: Date.now() }] : r.daBoQua;
+      // Bỏ qua → ghi lại (không trùng); mở lại → xoá khỏi danh sách đã bỏ qua
+      const rest = v ? r.daBoQua.filter((x) => x.moTa !== v.moTa) : r.daBoQua;
+      const daBoQua = !v ? r.daBoQua : patch.xuLy === 'bo' ? [...rest, { moTa: v.moTa, lyDo: patch.lyDo || '', at: Date.now() }] : v.xuLy === 'bo' ? rest : r.daBoQua;
       return { ...r, daBoQua, vanDe: r.vanDe.map((x) => (x.id === id ? { ...x, ...patch } : x)) };
     });
 
@@ -163,6 +168,7 @@ export default function RaSoatScreen({ project, onUpdate, onGo }: Props) {
     const pending = data?.vanDe.filter((v) => v.xuLy === 'nhan').length || 0;
     if (data && (pending || data.banSua.length) && !(await askConfirm('Rà lại sẽ thay danh sách vấn đề hiện tại. Các đề xuất đã nhận mà chưa sửa và các bản sửa chưa nhận sẽ mất. Tiếp tục?', { okLabel: 'Rà lại' }))) return;
     const readRevs = depRevs(project, 'raSoat');
+    const startedAt = section?.meta.updatedAt;
     const daBoQua = data?.daBoQua || [];
     run('ra-soat', async () => {
       const r = await runTask<RaSoatData>(
@@ -170,6 +176,7 @@ export default function RaSoatScreen({ project, onUpdate, onGo }: Props) {
         { brief, nhanVat, treatment, kichBan: { danY: kb.danY, canh: kb.canh }, daBoQua: daBoQua.map((x) => `${x.moTa}${x.lyDo ? ` (lý do bỏ qua: ${x.lyDo})` : ''}`) },
         project.id
       );
+      if (latestRef.current.sections.raSoat?.meta.updatedAt !== startedAt && !(await askConfirm('Bạn đã nhận / bỏ vấn đề trong lúc AI đang rà. Thay bằng kết quả rà mới?', { okLabel: 'Thay bằng kết quả mới', cancelLabel: 'Giữ bản đang có' }))) return;
       setSection((latest) => freshSection(latest, 'raSoat', { ...r.output, daBoQua: latest.sections.raSoat?.data.daBoQua || daBoQua }, Date.now(), readRevs));
       return r;
     });
@@ -177,8 +184,9 @@ export default function RaSoatScreen({ project, onUpdate, onGo }: Props) {
 
   /* ---------- AI: sửa các cảnh theo đề xuất đã nhận ---------- */
 
-  const accepted = (data?.vanDe || []).filter((v) => v.xuLy === 'nhan' && !v.canSuaDanY);
-  const scenesToFix = kb.danY.canh.map((c) => c.id).filter((id) => accepted.some((v) => v.canh.includes(id)) && !data?.banSua.some((b) => b.canhId === id));
+  /** Vấn đề đã nhận còn cần sửa ở cảnh này (chưa có bản sửa được nhận cho cảnh đó). */
+  const canSuaO = (v: VanDe, id: string) => v.xuLy === 'nhan' && !v.canSuaDanY && v.canh.includes(id) && !(v.daSuaCanh || []).includes(id);
+  const scenesToFix = kb.danY.canh.map((c) => c.id).filter((id) => (data?.vanDe || []).some((v) => canSuaO(v, id)) && !data?.banSua.some((b) => b.canhId === id));
 
   const fixAll = () =>
     run('sua', async () => {
@@ -187,12 +195,13 @@ export default function RaSoatScreen({ project, onUpdate, onGo }: Props) {
           const id = scenesToFix[n];
           const p = latestRef.current;
           const k = p.sections.kichBan!.data;
-          const list = (p.sections.raSoat?.data.vanDe || []).filter((v) => v.xuLy === 'nhan' && !v.canSuaDanY && v.canh.includes(id));
+          const list = (p.sections.raSoat?.data.vanDe || []).filter((v) => canSuaO(v, id));
           if (!list.length) continue;
           setTienDo(`Đang viết lại ${sceneLabel(id).toLowerCase()} (${n + 1}/${scenesToFix.length})…`);
           const goc = beatsOf(k, id);
+          const dauVao = dauVaoCanh(k, id); // đầu vào AI đọc — cảnh trước đổi sau đó thì cảnh này vẫn hiện "cần xem lại"
           const r = await runTask<Beat[]>('viet-canh', vietCanhInput(p, k, id, { truoc: goc, yeuCau: yeuCauSua(list) }), p.id);
-          const ban: BanSua = { canhId: id, vanDe: list.map((v) => v.id), beats: r.output, goc: hash(JSON.stringify(goc)), errors: r.errors, warnings: r.warnings };
+          const ban: BanSua = { canhId: id, vanDe: list.map((v) => v.id), beats: r.output, goc: hash(JSON.stringify(goc)), dauVao, errors: r.errors, warnings: r.warnings };
           edit((x) => ({ ...x, banSua: [...x.banSua.filter((b) => b.canhId !== id), ban] }));
         }
       } finally {
@@ -206,19 +215,32 @@ export default function RaSoatScreen({ project, onUpdate, onGo }: Props) {
     const ks = p.sections.kichBan!;
     if (hash(JSON.stringify(beatsOf(ks.data, ban.canhId))) !== ban.goc && !(await askConfirm(`${sceneLabel(ban.canhId)} đã được sửa ở màn 4 sau khi gửi AI. Vẫn thay bằng bản sửa này?`, { okLabel: 'Thay bằng bản sửa' }))) return;
     const now = Date.now();
-    const newKb: KichBanData = ghiCanh(ks.data, ban.canhId, ban.beats, now);
+    const dv = ban.dauVao || undefined;
+    const newKb: KichBanData = ghiCanh(ks.data, ban.canhId, ban.beats, now, dv);
     const ok = checkKichBan(newKb, kichBanCtx(p, beatGiay)).errors.length === 0 && !blockedDeps(p, 'kichBan').length && !isStale(p, 'kichBan');
     onUpdate((latest) => {
       const s = latest.sections.kichBan!;
-      const merged = ghiCanh(s.data, ban.canhId, ban.beats, now);
+      const merged = ghiCanh(s.data, ban.canhId, ban.beats, now, dv);
       const edited = editSection(s, merged, now);
       const r = latest.sections.raSoat!;
       return {
         sections: {
           ...latest.sections,
           kichBan: ok ? approveSection(latest, 'kichBan', edited, now) : edited,
-          raSoat: editSection(r, { ...r.data, banSua: r.data.banSua.filter((b) => b.canhId !== ban.canhId), // Vấn đề đã sửa xong khi không còn bản sửa nào khác (của cảnh khác) đang chờ cho nó
-          vanDe: r.data.vanDe.map((v) => (ban.vanDe.includes(v.id) && !r.data.banSua.some((b) => b.canhId !== ban.canhId && b.vanDe.includes(v.id)) ? { ...v, xuLy: 'da-sua' } : v)) }, now),
+          raSoat: editSection(
+            r,
+            {
+              ...r.data,
+              banSua: r.data.banSua.filter((b) => b.canhId !== ban.canhId),
+              // Vấn đề "đã sửa" khi mọi cảnh của nó đều đã nhận bản sửa
+              vanDe: r.data.vanDe.map((v) => {
+                if (!ban.vanDe.includes(v.id)) return v;
+                const daSuaCanh = Array.from(new Set([...(v.daSuaCanh || []), ban.canhId]));
+                return { ...v, daSuaCanh, xuLy: v.canh.every((c) => daSuaCanh.includes(c)) ? 'da-sua' : v.xuLy };
+              }),
+            },
+            now
+          ),
         },
       };
     });
@@ -284,7 +306,7 @@ export default function RaSoatScreen({ project, onUpdate, onGo }: Props) {
             {[...data.vanDe]
               .sort((a, b) => order(a) - order(b))
               .map((v) => (
-                <IssueCard key={v.id} v={v} no={data.vanDe.indexOf(v) + 1} sceneLabel={sceneLabel} onSet={(patch) => setVanDe(v.id, patch)} onGoDanY={() => onGo('kichBan')} />
+                <IssueCard key={v.id} v={v} no={data.vanDe.indexOf(v) + 1} sceneLabel={sceneLabel} onSet={(patch) => setVanDe(v.id, patch)} onGoDanY={() => onGo('kichBan')} disabled={!!busy} />
               ))}
           </section>
 
@@ -352,7 +374,7 @@ export default function RaSoatScreen({ project, onUpdate, onGo }: Props) {
             </details>
           )}
 
-          <Issues errors={blocking} warnings={check.warnings} />
+          <Issues errors={blocking} warnings={[...check.errors, ...check.warnings]} />
           <StatusBar project={project} sectionKey="raSoat" blocking={blocking} onApprove={approve} onKeep={keep} onRegenerate={review} busy={!!busy} />
 
           {section?.meta.status === 'duyet' && !blocked && (

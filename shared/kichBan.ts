@@ -154,9 +154,11 @@ export function ganMaBeat(kb: KichBanData, id: string, beats: Beat[]): { beats: 
   Object.entries(kb.canh).forEach(([k, v]) => {
     if (k !== id) v.beats.forEach((b) => taken.add(b.id));
   });
+  // Giữ mã cũ chỉ khi beat đó vốn thuộc cảnh này, hoặc là số mới chưa cấp (≥ soBeat) — không dùng lại số đã xoá
+  const own = new Set((kb.canh[id]?.beats || []).map((b) => b.id));
   let next = Math.max(kb.soBeat, ...beats.map((b) => idNum(b.id) + 1), 1);
   const out = beats.map((b) => {
-    if (b.id && /^B\d+$/.test(b.id) && !taken.has(b.id)) {
+    if (b.id && /^B\d+$/.test(b.id) && !taken.has(b.id) && (own.has(b.id) || idNum(b.id) >= kb.soBeat)) {
       taken.add(b.id);
       return b;
     }

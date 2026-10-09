@@ -14,7 +14,7 @@ import { raSoat, normLoai, normMuc } from '../server/tasks/defs/raSoat';
 import { beatGiayOf, thangChamOf } from '../server/tasks/genre';
 import { checkDanY, checkCanh, canhCtx, checkKichBan, checkRaSoat, raSoatBlocking, tongDiem } from '../shared/checks';
 import {
-  emptyKichBan, ghiCanh, suaCanh, tinhTrangCanh, dauBeat, daoCuTruoc, ganMaBeat, parseTrangThai, trangThaiText, beatId, normCanhId, normBeatId,
+  emptyKichBan, ghiCanh, suaCanh, tinhTrangCanh, dauVaoCanh, dauBeat, daoCuTruoc, ganMaBeat, parseTrangThai, trangThaiText, beatId, normCanhId, normBeatId,
 } from '../shared/kichBan';
 import type { DanY, Beat, KichBanData, RaSoatData } from '../shared/project';
 import { checkTreatment, checkCharacters, normName, sentenceCount as sc2 } from '../shared/checks';
@@ -637,7 +637,7 @@ await test('rà soát: kiểm điểm ngoài thang, thiếu đề xuất; dướ
   const base: RaSoatData = {
     diem: [{ ten: 'a', toiDa: 2, diem: 3, nhanXet: 'x' }, { ten: 'b', toiDa: 8, diem: 2, nhanXet: 'x' }],
     nguong: 7, nhanXet: '', banSua: [], daBoQua: [],
-    vanDe: [{ id: 'V1', loai: 'nhịp', muc: 'cao', canh: ['S1'], beat: [], moTa: 'm', deXuat: '', canSuaDanY: false, xuLy: 'chua', lyDo: '' }],
+    vanDe: [{ id: 'V1', loai: 'nhịp', muc: 'cao', canh: ['S1'], beat: [], moTa: 'm', deXuat: '', canSuaDanY: false, daSuaCanh: [], xuLy: 'chua', lyDo: '' }],
   };
   const r = checkRaSoat(base, { canhIds: ['S1'], beatIds: [], soTieuChi: 2 });
   assert.ok(r.errors.some((e) => e.includes('ngoài thang')));
@@ -662,6 +662,38 @@ await test('màn ⑥ ⑦ dựa trên ⑤: ⑤ chưa duyệt thì ⑥ bị khoá'
   const p: Project = newProjectData('p1', 1);
   assert.ok(missingDeps(p, 'bible').includes('raSoat'));
   assert.ok(missingDeps(p, 'phanCanh').includes('raSoat'));
+});
+
+/* ---------------- Các lỗi đã sửa sau lượt soát lượt 2 ---------------- */
+
+await test('mã beat: số đã cấp rồi xoá không được dùng lại, kể cả khi AI trả về số đó', () => {
+  let kb = goodKichBan();
+  // Bạn thêm một beat ở cảnh 1 (nhận số mới), rồi xoá nó
+  kb = suaCanh(kb, 'S1', [...kb.canh.S1.beats, { ...kb.canh.S1.beats[0], id: '' }], 2);
+  const added = kb.canh.S1.beats[kb.canh.S1.beats.length - 1].id;
+  kb = suaCanh(kb, 'S1', kb.canh.S1.beats.filter((b) => b.id !== added), 3);
+  // Kết quả AI (cấp số lúc bấm nút) mang đúng số vừa xoá → phải nhận số mới
+  const g = ganMaBeat(kb, 'S4', [{ ...kb.canh.S4.beats[0], id: added }]);
+  assert.notEqual(g.beats[0].id, added);
+  // Beat vốn của cảnh thì giữ mã
+  assert.equal(ganMaBeat(kb, 'S4', kb.canh.S4.beats).beats[0].id, kb.canh.S4.beats[0].id);
+});
+
+await test('bản sửa ghi kèm đầu vào lúc gửi AI: cảnh trước đổi sau đó thì vẫn "cần xem lại"', () => {
+  let kb = goodKichBan();
+  const dv = dauVaoCanh(kb, 'S3'); // lúc gửi AI viết lại cảnh 3
+  // Nhận bản sửa cảnh 2 trước, cuối cảnh 2 đổi
+  const b2 = kb.canh.S2.beats;
+  kb = ghiCanh(kb, 'S2', b2.map((x, i) => (i === b2.length - 1 ? { ...x, cuoiBeat: [{ tag: 'lan', moTa: 'đứng dậy' }] } : x)), 2);
+  // Nhận bản sửa cảnh 3 với đầu vào cũ → vẫn cần xem lại
+  kb = ghiCanh(kb, 'S3', kb.canh.S3.beats, 3, dv);
+  assert.equal(tinhTrangCanh(kb, 'S3'), 'can-xem-lai');
+});
+
+await test('rà soát: mức "nghiêm trọng" là cao; "sai logic" không bị coi là khó với AI video', () => {
+  assert.equal(normMuc('Nghiêm trọng'), 'cao');
+  assert.equal(normLoai('sai logic'), 'khác');
+  assert.equal(normLoai('khó làm video'), 'khó với AI video');
 });
 
 /* ---------------- Kết quả ---------------- */

@@ -25,12 +25,12 @@ const THANG_CHUNG = { tieuChi: [{ ten: 'Chấm chung', toiDa: 10 }], nguong: 7 }
 
 export function normLoai(v: string): string {
   const n = normName(v);
-  return LOAI_VAN_DE.find((l) => n && (normName(l) === n || n.includes(normName(l)) || normName(l).includes(n))) || (n.includes('ai') || n.includes('video') ? 'khó với AI video' : 'khác');
+  return LOAI_VAN_DE.find((l) => n && (normName(l) === n || n.includes(normName(l)) || normName(l).includes(n))) || (n.includes('video') || n.split(' ').includes('ai') ? 'khó với AI video' : 'khác');
 }
 
 export function normMuc(v: string): MucVanDe {
   const t = toTag(v);
-  if (t.includes('cao') || t.includes('high') || t.includes('nang')) return 'cao';
+  if (t.includes('cao') || t.includes('high') || t.includes('nang') || t.includes('nghiem') || t.includes('critical') || t.includes('serious')) return 'cao';
   if (t.includes('thap') || t.includes('low') || t.includes('nhe')) return 'thap';
   return 'vua';
 }
@@ -73,8 +73,8 @@ export const raSoat: TaskDef<RaSoatInput, RaSoatData> = {
         items: {
           type: 'OBJECT',
           properties: {
-            loai: { type: 'STRING' },
-            muc: { type: 'STRING', description: 'cao, vua hoặc thap' },
+            loai: { type: 'STRING', format: 'enum', enum: [...LOAI_VAN_DE] },
+            muc: { type: 'STRING', format: 'enum', enum: ['cao', 'vua', 'thap'] },
             canh: { type: 'ARRAY', items: { type: 'STRING' } },
             beat: { type: 'ARRAY', items: { type: 'STRING' } },
             moTa: { type: 'STRING' },
@@ -146,6 +146,7 @@ export const raSoat: TaskDef<RaSoatInput, RaSoatData> = {
         moTa: str(x.moTa, 1200),
         deXuat: str(x.deXuat, 1200),
         canSuaDanY: x.canSuaDanY === true,
+        daSuaCanh: [],
         xuLy: 'chua',
         lyDo: '',
       };
