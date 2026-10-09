@@ -36,15 +36,17 @@ function upgrade(p: any): Project | null {
     ...p,
     briefWork: { ...base.briefWork, ...(p.briefWork || {}), input: { ...base.briefWork.input, ...(p.briefWork?.input || {}) } },
     sections: { ...(p.sections || {}) },
-    thietKeTam: { ...base.thietKeTam, ...(p.thietKeTam || {}) },
   };
 }
 
 export const loadProjects = (): Project[] => read<any[]>(KEY, []).map(upgrade).filter((p): p is Project => !!p);
 export const saveProjects = (v: Project[]) => write(KEY, v);
 
-/** Mọi ảnh của dự án (hiện chỉ có ảnh ở bước thiết kế tạm). */
-export const imageIdsOf = (p: Project) => (p.thietKeTam.assets || []).map((a) => a.imageId).filter((x): x is string => !!x);
+/** Mọi ảnh của dự án (ảnh tham chiếu ở màn ⑥; ảnh của màn ⑥ tạm cũ nếu còn). */
+export const imageIdsOf = (p: Project) =>
+  [...Object.values(p.sections.bible?.data.anh || {}).map((a) => a.imageId), ...((p as any).thietKeTam?.assets || []).map((a: any) => a?.imageId)].filter(
+    (x): x is string => typeof x === 'string' && !!x
+  );
 
 /* ---------- Xuất / nhập toàn bộ dữ liệu ra file ---------- */
 

@@ -1,4 +1,5 @@
-import type { CharacterDesign, PropDesign, LegacyProject, GenreInfo } from '../types';
+import type { GenreInfo } from '../types';
+import type { LoaiAnh } from '../../shared/bible';
 import { recordUsage } from '../lib/usage';
 import { modelPrefsHeader } from '../lib/modelPrefs';
 import { keysHeader, hasAnyKey } from '../lib/apiKeys';
@@ -97,16 +98,7 @@ export interface LogDetail extends Omit<LogSummary, 'attempts'> {
 export const getLogs = () => get<{ logs: LogSummary[] }>('/api/logs').then((d) => d.logs || []);
 export const getLog = (id: string) => get<{ log: LogDetail }>(`/api/logs/${encodeURIComponent(id)}`).then((d) => d.log);
 
-/* ---------- Bước Nhân vật & đạo cụ cũ (tạm ở màn ⑥) ---------- */
-
-export async function makeDesign(p: LegacyProject): Promise<{ characters: CharacterDesign[]; props: PropDesign[] }> {
-  const data = await post<{ design: { characters: CharacterDesign[]; props: PropDesign[] } }>(
-    '/api/design',
-    { synopsis: p.synopsis, style: p.style, aspect: p.aspect, characters: p.characterSeeds, props: p.propSeeds },
-    { projectId: p.id }
-  );
-  return data.design;
-}
+/* ---------- Màn ⑥ — quét ảnh tham chiếu, gán @tag ---------- */
 
 export interface ImageMatch {
   index: number;
@@ -118,7 +110,7 @@ export interface ImageMatch {
 
 export async function matchImages(
   images: { mime: string; data: string }[],
-  tags: { tag: string; kind: 'character' | 'prop'; note: string; description: string }[],
+  tags: { tag: string; kind: LoaiAnh; note: string; description: string }[],
   projectId?: string
 ): Promise<ImageMatch[]> {
   const data = await post<{ matches: ImageMatch[] }>('/api/match-images', { images, tags }, { projectId });

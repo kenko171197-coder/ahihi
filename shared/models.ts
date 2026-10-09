@@ -55,7 +55,10 @@ export const TASKS: { key: string; label: string; model: string; why: string }[]
   { key: 'dan-y-canh', label: '④ Dàn ý cảnh', model: 'gemini-3.1-pro-preview', why: 'Chia cả phim thành cảnh, nhiều ràng buộc về giây và Cài – Dùng; key không có Pro thì tự lùi về Flash' },
   { key: 'viet-canh', label: '④ Viết beat từng cảnh', model: 'gemini-3.8-flash', why: 'Gọi một lần mỗi cảnh (phim dài 30–40 lần), cần sáng tạo và giữ luật' },
   { key: 'ra-soat', label: '⑤ Rà soát', model: 'gemini-3.1-pro-preview', why: 'Đọc cả kịch bản và chấm, cần phán đoán tốt' },
-  { key: 'design', label: '⑥ Thiết kế nhân vật & đạo cụ (bản tạm)', model: 'gemini-3.8-flash', why: 'Prompt ảnh quyết định nhân vật có đồng nhất hay không' },
+  { key: 'bible-style', label: '⑥ Đề xuất style', model: 'gemini-3.8-flash', why: 'Cần cảm quan hình ảnh, bám brief và thể loại' },
+  { key: 'bible-nhan-vat', label: '⑥ Nhân vật: bộ đồ, giọng', model: 'gemini-3.8-flash', why: 'Mô tả cố định quyết định nhân vật có đồng nhất hay không' },
+  { key: 'bible-dao-cu', label: '⑥ Đạo cụ', model: 'gemini-3.8-flash', why: 'Mô tả cố định và prompt ảnh đạo cụ' },
+  { key: 'bible-boi-canh', label: '⑥ Bối cảnh, ánh sáng từng cảnh', model: 'gemini-3.8-flash', why: 'Mô tả không gian và câu ánh sáng chép vào mọi beat' },
   { key: 'match', label: '⑥ Quét ảnh gán @tag', model: 'gemini-3.1-flash-lite', why: 'So ảnh với mô tả, bạn duyệt lại' },
   { key: 'testkey', label: 'Kiểm tra key', model: 'gemini-3.1-flash-lite', why: 'Chỉ gọi thử' },
 ];

@@ -1,5 +1,5 @@
 // Code kiểm dùng chung: server kiểm kết quả AI, giao diện kiểm bản người dùng sửa tay. Thuần, không thư viện ngoài.
-import type { Beat, CanhDanY, Character, DanY, DaoCu, DongTrangThai, KichBanData, MucThoai, NhacNen, RaSoatData, TreatmentData } from './project';
+import type { AnhSangCanh, BibleBoiCanh, BibleData, BibleDaoCu, BibleNhanVat, Beat, CanhDanY, Character, DanY, DaoCu, DongTrangThai, KichBanData, MucThoai, NhacNen, RaSoatData, TreatmentData } from './project';
 import { BEAT_MAX, BEAT_MIN, PHAN_DOAN_TU_GIAY, fmtGiay, maxNhanVat } from './project';
 import { beatsOf, daoCuTruoc, tinhTrangCanh, tongGiayBeat, viTriCanh } from './kichBan';
 
@@ -374,3 +374,164 @@ export function raSoatBlocking(r: RaSoatData): string[] {
 
 /** Vị trí cảnh để hiện "Cảnh 3" thay vì mã. */
 export const soCanh = (d: DanY, id: string) => viTriCanh(d, id) + 1;
+
+/* ============================ MÀN ⑥ — BIBLE ============================ */
+
+/** Chữ tiếng Việt có dấu (phần cố định phải viết tiếng Anh). */
+const VIET_RE = /[ăâđêôơưàáảãạằắẳẵặầấẩẫậèéẻẽẹềếểễệìíỉĩịòóỏõọồốổỗộờớởỡợùúủũụừứửữựỳýỷỹỵ]/i;
+export const coTiengViet = (s: string) => VIET_RE.test(String(s || ''));
+export const soTu = (s: string) => String(s || '').trim().split(/\s+/).filter(Boolean).length;
+
+/** Giới hạn số từ của từng loại ô (tiếng Anh). */
+export const GIOI_HAN_TU = { moTaNhanVat: 60, moTaDaoCu: 40, moTaBoiCanh: 60, khungAnh: 40, giong: 30, anhSang: 30, style: 50, vaiTro: 10 };
+
+const TINH_CACH_RE = /\b(kind|kindhearted|shy|brave|gentle|cheerful|lazy|friendly|stubborn|caring|honest|smart|clever|loving|generous|selfish|grumpy|optimistic|pessimistic|introverted|extroverted|hardworking|diligent|independent)\b/i;
+const NGUOI_RE = /\b(person|people|man|men|woman|women|girl|boy|child|children|someone|figure|crowd|she|he)\b/i;
+
+/** Tên nhân vật xuất hiện trong chữ (so theo từ, không dấu). */
+function nhacTen(text: string, names: { tag: string; ten: string }[]): string[] {
+  const words = ` ${normName(text)} `;
+  return names.filter((n) => n.ten && normName(n.ten).length > 1 && words.includes(` ${normName(n.ten)} `)).map((n) => n.ten);
+}
+
+export interface BibleCtx {
+  /** Nhân vật màn ② (để kiểm tên) */
+  nhanVat: Character[];
+  /** id cảnh theo thứ tự dàn ý */
+  canhIds: string[];
+}
+
+/** Kiểm một ô tiếng Anh: không trống, không tiếng Việt, không quá dài. */
+function oTiengAnh(errors: string[], label: string, text: string, max: number, required = true) {
+  if (!String(text || '').trim()) {
+    if (required) errors.push(`${label} còn trống.`);
+    return;
+  }
+  if (coTiengViet(text)) errors.push(`${label} phải viết tiếng Anh (đang có chữ tiếng Việt có dấu).`);
+  const n = soTu(text);
+  if (n > max) errors.push(`${label} dài ${n} từ — tối đa ${max} từ.`);
+}
+
+/** Kiểm phần style (dùng cho kết quả AI đề xuất và ô style đã chọn). */
+export function checkStyle(style: string, nhanVat: Character[], label = 'Style'): string[] {
+  const errors: string[] = [];
+  oTiengAnh(errors, label, style, GIOI_HAN_TU.style);
+  if (style.includes('@')) errors.push(`${label} không được có tag (@…).`);
+  const ten = nhacTen(style, nhanVat);
+  if (ten.length) errors.push(`${label} không được nhắc tên nhân vật (${ten.join(', ')}).`);
+  return errors;
+}
+
+export function checkBibleNhanVat(list: BibleNhanVat[], ctx: BibleCtx, tagKhac: Set<string>): CheckResult {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  const boTags = new Map<string, string>();
+  list.forEach((n) => {
+    if (n.khongDung) {
+      warnings.push(`${n.ten} (@${n.tag}) không còn trong kịch bản — xoá nếu không cần.`);
+      return;
+    }
+    const others = ctx.nhanVat.filter((c) => c.tag !== n.tag);
+    if (n.coThoai) oTiengAnh(errors, `Giọng của ${n.ten}`, n.giong, GIOI_HAN_TU.giong);
+    if (n.canh.length && !n.bo.length) errors.push(`${n.ten} có mặt trong phim nhưng chưa có bộ đồ nào.`);
+    if (n.bo.length > 4) warnings.push(`${n.ten} có ${n.bo.length} bộ đồ — nhiều bộ thì khó giữ nhân vật đồng nhất.`);
+    n.bo.forEach((bo, i) => {
+      const L = `${n.ten} — bộ "${bo.ten || i + 1}"`;
+      if (!/^[a-z0-9]{1,15}$/.test(bo.tag)) errors.push(`${L}: ${tagErr(bo.tag)}`);
+      else if (boTags.has(bo.tag) || tagKhac.has(bo.tag)) errors.push(`${L}: tag @${bo.tag} bị trùng.`);
+      if (i === 0 && bo.tag !== n.tag) errors.push(`${L}: bộ đầu tiên phải mang tag @${n.tag}.`);
+      boTags.set(bo.tag, L);
+      oTiengAnh(errors, `${L}: mô tả cố định`, bo.moTa, GIOI_HAN_TU.moTaNhanVat);
+      oTiengAnh(errors, `${L}: khung ảnh`, bo.khungAnh, GIOI_HAN_TU.khungAnh);
+      oTiengAnh(errors, `${L}: vai trò ảnh`, bo.vaiTro, GIOI_HAN_TU.vaiTro);
+      if (!bo.note) errors.push(`${L}: ô Note còn trống.`);
+      if (`${bo.moTa} ${bo.khungAnh}`.includes('@')) errors.push(`${L}: mô tả không được có tag (@…).`);
+      const ten = nhacTen(`${bo.moTa} ${bo.khungAnh}`, others);
+      if (ten.length) errors.push(`${L}: mô tả không được nhắc nhân vật khác (${ten.join(', ')}).`);
+      if (TINH_CACH_RE.test(bo.moTa)) warnings.push(`${L}: mô tả có từ chỉ tính cách ("${TINH_CACH_RE.exec(bo.moTa)![0]}") — chỉ nên tả cái nhìn thấy.`);
+      if (!bo.canh.length) warnings.push(`${L}: chưa dùng ở cảnh nào.`);
+    });
+    // Mỗi cảnh có mặt thuộc đúng một bộ đồ
+    n.canh.forEach((id) => {
+      const k = n.bo.filter((bo) => bo.canh.includes(id)).length;
+      const no = ctx.canhIds.indexOf(id) + 1;
+      if (k === 0) errors.push(`${n.ten}: cảnh ${no} chưa chọn bộ đồ.`);
+      if (k > 1) errors.push(`${n.ten}: cảnh ${no} đang thuộc ${k} bộ đồ — mỗi cảnh một bộ.`);
+    });
+  });
+  return { errors, warnings };
+}
+
+export function checkBibleDaoCu(list: BibleDaoCu[], ctx: BibleCtx): CheckResult {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  list.forEach((d) => {
+    const L = `Đạo cụ @${d.tag}`;
+    if (d.khongDung) {
+      warnings.push(`${L} không còn trong kịch bản — xoá nếu không cần.`);
+      return;
+    }
+    oTiengAnh(errors, `${L}: mô tả cố định`, d.moTa, GIOI_HAN_TU.moTaDaoCu);
+    oTiengAnh(errors, `${L}: khung ảnh`, d.khungAnh, GIOI_HAN_TU.khungAnh);
+    oTiengAnh(errors, `${L}: vai trò ảnh`, d.vaiTro, GIOI_HAN_TU.vaiTro);
+    if (!d.note) errors.push(`${L}: ô Note còn trống.`);
+    if (`${d.moTa} ${d.khungAnh}`.includes('@')) errors.push(`${L}: mô tả không được có tag (@…).`);
+    const ten = nhacTen(`${d.moTa} ${d.khungAnh}`, ctx.nhanVat);
+    if (ten.length) errors.push(`${L}: mô tả không được nhắc tên nhân vật (${ten.join(', ')}).`);
+  });
+  return { errors, warnings };
+}
+
+export function checkBibleBoiCanh(list: BibleBoiCanh[], anhSang: AnhSangCanh[], ctx: BibleCtx): CheckResult {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  list.forEach((c) => {
+    const L = `Bối cảnh "${c.ten}" (@${c.tag})`;
+    if (c.khongDung) {
+      warnings.push(`${L} không còn trong kịch bản — xoá nếu không cần.`);
+      return;
+    }
+    oTiengAnh(errors, `${L}: mô tả cố định`, c.moTa, GIOI_HAN_TU.moTaBoiCanh);
+    const ten = nhacTen(c.moTa, ctx.nhanVat);
+    if (ten.length) errors.push(`${L}: mô tả không được nhắc tên nhân vật (${ten.join(', ')}).`);
+    if (c.moTa.includes('@')) errors.push(`${L}: mô tả không được có tag (@…).`);
+    if (NGUOI_RE.test(c.moTa)) warnings.push(`${L}: mô tả có nhắc tới người ("${NGUOI_RE.exec(c.moTa)![0]}") — ảnh bối cảnh phải không có người.`);
+    c.bienThe.forEach((v) => {
+      const V = `${L} — ${v.thoiDiem || 'biến thể'} (@${v.tag})`;
+      oTiengAnh(errors, `${V}: khung ảnh`, v.khungAnh, GIOI_HAN_TU.khungAnh);
+      oTiengAnh(errors, `${V}: vai trò ảnh`, v.vaiTro, GIOI_HAN_TU.vaiTro);
+      if (!v.note) errors.push(`${V}: ô Note còn trống.`);
+      if (NGUOI_RE.test(v.khungAnh)) warnings.push(`${V}: khung ảnh có nhắc tới người ("${NGUOI_RE.exec(v.khungAnh)![0]}").`);
+    });
+  });
+  const first = new Map<string, string>();
+  anhSang.forEach((a) => {
+    const no = ctx.canhIds.indexOf(a.canh) + 1;
+    oTiengAnh(errors, `Ánh sáng cảnh ${no}`, a.moTa, GIOI_HAN_TU.anhSang);
+    const k = `${a.diaDiem}|${normName(a.thoiDiem)}|${normName(a.goc)}`;
+    if (a.moTa && first.has(k) && first.get(k) !== a.moTa) warnings.push(`Ánh sáng cảnh ${no} giống cảnh trước (cùng địa điểm, thời điểm, ánh sáng) mà câu tiếng Anh khác — nên dùng cùng một câu.`);
+    if (a.moTa && !first.has(k)) first.set(k, a.moTa);
+  });
+  return { errors, warnings };
+}
+
+/** Kiểm cả bible (điều kiện duyệt màn ⑥). Thiếu ảnh chỉ cảnh báo. */
+export function checkBible(b: BibleData, ctx: BibleCtx): CheckResult {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  if (!b.style.trim()) errors.push('Chưa chọn style.');
+  else errors.push(...checkStyle(b.style, ctx.nhanVat));
+  const tagKhac = new Set([...b.daoCu.map((d) => d.tag), ...b.boiCanh.flatMap((c) => c.bienThe.map((v) => v.tag)), ...ctx.nhanVat.map((c) => c.tag).filter((t) => !b.nhanVat.some((n) => n.tag === t))]);
+  const parts = [checkBibleNhanVat(b.nhanVat, ctx, tagKhac), checkBibleDaoCu(b.daoCu, ctx), checkBibleBoiCanh(b.boiCanh, b.anhSang, ctx)];
+  parts.forEach((r) => {
+    errors.push(...r.errors);
+    warnings.push(...r.warnings);
+  });
+  const thieuAnh = [
+    ...b.nhanVat.filter((n) => !n.khongDung).flatMap((n) => n.bo.map((x) => x.tag)),
+    ...b.daoCu.filter((d) => !d.khongDung).map((d) => d.tag),
+    ...b.boiCanh.filter((c) => !c.khongDung).flatMap((c) => c.bienThe.map((v) => v.tag)),
+  ].filter((t) => !b.anh[t]?.imageId);
+  if (thieuAnh.length) warnings.push(`Còn ${thieuAnh.length} tag chưa có ảnh tham chiếu: ${thieuAnh.map((t) => `@${t}`).join(', ')}. Màn 8 sẽ cần đủ ảnh.`);
+  return { errors, warnings };
+}

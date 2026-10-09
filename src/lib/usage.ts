@@ -33,7 +33,10 @@ export const FEATURE_NAMES: Record<string, string> = {
   '/api/task/dan-y-canh': '④ Dàn ý cảnh',
   '/api/task/viet-canh': '④ Viết cảnh',
   '/api/task/ra-soat': '⑤ Rà soát',
-  '/api/design': '⑥ Thiết kế (bản tạm)',
+  '/api/task/bible-style': '⑥ Style',
+  '/api/task/bible-nhan-vat': '⑥ Nhân vật',
+  '/api/task/bible-dao-cu': '⑥ Đạo cụ',
+  '/api/task/bible-boi-canh': '⑥ Bối cảnh',
   '/api/match-images': '⑥ Quét ảnh gán @tag',
   '/api/test-key': 'Kiểm tra key',
 };

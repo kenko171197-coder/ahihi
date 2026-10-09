@@ -318,14 +318,101 @@ export interface RaSoatData {
 
 /* ============================ DỰ ÁN ============================ */
 
-/** Dữ liệu tạm của bước Nhân vật & đạo cụ cũ — dùng tạm ở màn ⑥ cho tới lượt 3. */
-export interface ThietKeTam {
-  synopsis: string;
+/* ============================ MÀN ⑥ — BIBLE & THAM CHIẾU ============================ */
+
+/** Một bộ đồ của nhân vật = một ảnh tham chiếu. */
+export interface BoDo {
+  /** Tag ảnh: bộ đầu = tag nhân vật, bộ thêm do code đặt (lanngu) */
+  tag: string;
+  /** Tên bộ đồ, tiếng Việt ("đồ đi làm", "đồ ngủ") */
+  ten: string;
+  /** Cảnh nhân vật mặc bộ này */
+  canh: string[];
+  /** Mô tả cố định, tiếng Anh: ngoại hình + trang phục (chép nguyên văn vào prompt ảnh và prompt video) */
+  moTa: string;
+  /** Ô Note của ảnh, tiếng Việt */
+  note: string;
+  /** Khung ảnh, tiếng Anh: góc, tư thế, nền */
+  khungAnh: string;
+  /** Vai trò ảnh ở màn ⑧, tiếng Anh ngắn ("Lan in her office clothes") */
+  vaiTro: string;
+}
+
+export interface BibleNhanVat {
+  tag: string;
+  ten: string;
+  /** Cảnh có mặt (cần ảnh) */
+  canh: string[];
+  coThoai: boolean;
+  /** Giọng, tiếng Anh — chỉ dùng trong prompt video (phần thoại) */
+  giong: string;
+  /** Rỗng nếu nhân vật không có mặt (chỉ có giọng) */
+  bo: BoDo[];
+  /** Không còn trong kịch bản (sau khi bóc tách lại) */
+  khongDung?: boolean;
+}
+
+export interface BibleDaoCu {
+  tag: string;
+  /** Mô tả trong kịch bản (tiếng Việt) */
+  moTaKichBan: string;
+  /** Các trạng thái gặp trong phim, theo thứ tự (tiếng Việt) */
+  trangThai: string[];
+  canh: string[];
+  moTa: string;
+  note: string;
+  khungAnh: string;
+  vaiTro: string;
+  khongDung?: boolean;
+}
+
+/** Một ảnh bối cảnh: một cặp địa điểm + thời điểm. */
+export interface BienTheBoiCanh {
+  tag: string;
+  thoiDiem: string;
+  canh: string[];
+  note: string;
+  khungAnh: string;
+  vaiTro: string;
+}
+
+export interface BibleBoiCanh {
+  /** Tag địa điểm của dàn ý */
+  tag: string;
+  ten: string;
+  canh: string[];
+  /** Mô tả cố định của không gian, tiếng Anh */
+  moTa: string;
+  bienThe: BienTheBoiCanh[];
+  khongDung?: boolean;
+}
+
+export interface AnhSangCanh {
+  canh: string;
+  /** Tag địa điểm + thời điểm + ánh sáng tiếng Việt của dàn ý (để biết cảnh nào giống nhau) */
+  diaDiem: string;
+  thoiDiem: string;
+  goc: string;
+  /** Câu ánh sáng tiếng Anh cố định */
+  moTa: string;
+}
+
+export interface AnhThamChieu {
+  imageId?: string;
+  /** AI thấy gì trong ảnh lúc quét */
+  seen?: string;
+  warning?: string;
+}
+
+export interface BibleData {
   style: string;
-  characterSeeds: { name: string; brief: string }[];
-  propSeeds: { name: string; brief: string }[];
-  design?: { characters: any[]; props: any[] };
-  assets?: { tag: string; kind: 'character' | 'prop'; note: string; imageId?: string; seen?: string; warning?: string }[];
+  phuongAnStyle: { style: string; giaiThich: string }[];
+  nhanVat: BibleNhanVat[];
+  daoCu: BibleDaoCu[];
+  boiCanh: BibleBoiCanh[];
+  anhSang: AnhSangCanh[];
+  /** Ảnh tham chiếu theo tag */
+  anh: Record<string, AnhThamChieu>;
 }
 
 export interface Project {
@@ -343,8 +430,8 @@ export interface Project {
     treatment?: Section<TreatmentData>;
     kichBan?: Section<KichBanData>;
     raSoat?: Section<RaSoatData>;
+    bible?: Section<BibleData>;
   };
-  thietKeTam: ThietKeTam;
 }
 
 export type ProjectPatch = Partial<Project> | ((latest: Project) => Partial<Project>);
@@ -374,7 +461,6 @@ export function newProjectData(id: string, now: number, title = 'Dự án mới'
     manHinh: 'brief',
     briefWork: { input: { ...DEFAULT_BRIEF_INPUT, thoai: { ...DEFAULT_BRIEF_INPUT.thoai } }, cauHoi: [], nhanXet: '', phuongAn: [], chon: -1 },
     sections: {},
-    thietKeTam: { synopsis: '', style: '', characterSeeds: [], propSeeds: [] },
   };
 }
 

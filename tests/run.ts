@@ -16,7 +16,10 @@ import { checkDanY, checkCanh, canhCtx, checkKichBan, checkRaSoat, raSoatBlockin
 import {
   emptyKichBan, ghiCanh, suaCanh, tinhTrangCanh, dauVaoCanh, dauBeat, daoCuTruoc, ganMaBeat, parseTrangThai, trangThaiText, beatId, normCanhId, normBeatId,
 } from '../shared/kichBan';
-import type { DanY, Beat, KichBanData, RaSoatData } from '../shared/project';
+import type { DanY, Beat, KichBanData, RaSoatData, BibleData } from '../shared/project';
+import { bocTach, emptyBible, mucAnh, promptDaoCu, promptBoiCanh, promptSheet, PROP_SUFFIX, dongBoAnhSang } from '../shared/bible';
+import { checkBible, coTiengViet } from '../shared/checks';
+import { bibleStyle, bibleNhanVat, bibleDaoCu, bibleBoiCanh } from '../server/tasks/defs/bible';
 import { checkTreatment, checkCharacters, normName, sentenceCount as sc2 } from '../shared/checks';
 import { normVai } from '../server/tasks/defs/nhanVat';
 import {
@@ -119,6 +122,38 @@ function goodKichBan(): KichBanData {
 const kbCtx = { total: 60, treatment: goodTreatment(60), nhanVat: chars, mucThoai: 'it' as const, nhacNen: 'ai-de-xuat' as const, beatGiay: [4, 8] as [number, number] };
 const ctxOf = (kb: KichBanData, id: string) => canhCtx(kb.danY, id, { ...kbCtx, daoCuTruoc: daoCuTruoc(kb, id) })!;
 
+/** Kịch bản mẫu có đạo cụ, đổi trạng thái, mẹ nói qua điện thoại, cảnh 4 sang buổi sáng. */
+function kbBible(): KichBanData {
+  let kb = goodKichBan();
+  kb = { ...kb, danY: { ...kb.danY, canh: kb.danY.canh.map((c) => (c.id === 'S4' ? { ...c, thoiDiem: 'sáng sớm', anhSang: 'nắng sớm qua cửa sổ' } : c)) } };
+  const s2 = kb.canh.S2.beats;
+  kb = suaCanh(kb, 'S2', s2.map((b, i) => (i === 0 ? { ...b, daoCuMoi: [{ tag: 'thungxop', moTa: 'thùng xốp trắng mẹ gửi' }], coMat: ['lan', 'thungxop'], thayDoi: [{ tag: 'thungxop', truoc: 'đóng kín', sau: 'mở nắp' }], thoai: [{ ai: 'me', cachNoi: 'qua điện thoại', cau: 'Nhận được chưa con?' }] } : b)), 2);
+  return kb;
+}
+
+const EN = {
+  moTa: 'A slim young woman in her mid twenties with shoulder length black hair, wearing a beige knit cardigan over a white blouse and dark trousers.',
+  khung: 'Full body front view, standing straight, neutral expression, plain light grey background, soft studio lighting.',
+};
+
+/** Bible đã viết đủ cho kbBible(). */
+function goodBible(): BibleData {
+  const b = bocTach(kbBible(), chars);
+  return {
+    ...b,
+    style: 'Cinematic photorealistic live-action, soft natural light, warm muted colors, subtle film grain.',
+    nhanVat: b.nhanVat.map((n) => ({ ...n, giong: n.coThoai ? 'middle aged woman, warm gentle voice, Northern Vietnamese accent' : '', bo: n.bo.map((x) => ({ ...x, moTa: EN.moTa, note: 'Cô gái gầy, tóc ngang vai, áo len be.', khungAnh: EN.khung, vaiTro: 'Lan in her cardigan' })) })),
+    daoCu: b.daoCu.map((d) => ({ ...d, moTa: 'A white styrofoam box with a lid, about the size of a small suitcase, reaching an adult knee.', note: 'Thùng xốp trắng cỡ va li nhỏ.', khungAnh: 'Centered on a white background, lid closed, studio lighting, sharp focus.', vaiTro: 'the white foam box' })),
+    boiCanh: b.boiCanh.map((c) => ({ ...c, moTa: 'A small rented room with a single bed, a low wooden desk, a plastic wardrobe and clothes hanging on a chair.', bienThe: c.bienThe.map((v) => ({ ...v, note: 'Phòng trọ.', khungAnh: 'Late night, wide shot from the doorway.', vaiTro: 'the rented room' })) })),
+    anhSang: dongBoAnhSang(b.anhSang.map((a) => ({ ...a, moTa: a.thoiDiem === 'khuya' ? 'Cold white ceiling tube light mixed with a warm desk lamp.' : 'Soft early morning sunlight through the window.' }))),
+  };
+}
+
+function bibleInput(bible: BibleData = goodBible()) {
+  const kb = kbBible();
+  return { brief, nhanVat: chars, kichBan: { danY: kb.danY, canh: kb.canh }, bible };
+}
+
 /* ---------------- Khuôn prompt ---------------- */
 
 await test('render: biến, khối #, khối ^, bỏ ghi chú', () => {
@@ -136,6 +171,10 @@ await test('mọi file prompt chỉ dùng biến mà tác vụ cung cấp', () =
     'dan-y-canh': { brief, nhanVat: chars, treatment: goodTreatment(60), soCanh: 1 },
     'viet-canh': { brief, nhanVat: chars, treatment: goodTreatment(60), danY: goodDanY(), canhId: 'S2', canhTruoc: { cuoi: goodDanY().canh[0].cuoiCanh, beats: beatsFor(goodDanY().canh[0], 1) }, daoCuTruoc: [], soBeat: 3 },
     'ra-soat': { brief, nhanVat: chars, treatment: goodTreatment(60), kichBan: goodKichBan(), daBoQua: ['Cảnh 1 hơi dài'] },
+    'bible-style': bibleInput(),
+    'bible-nhan-vat': bibleInput(),
+    'bible-dao-cu': bibleInput(),
+    'bible-boi-canh': bibleInput(),
   };
   for (const [id, def] of Object.entries(TASK_DEFS)) {
     const input = def.parseInput(samples[id]);
@@ -694,6 +733,140 @@ await test('rà soát: mức "nghiêm trọng" là cao; "sai logic" không bị 
   assert.equal(normMuc('Nghiêm trọng'), 'cao');
   assert.equal(normLoai('sai logic'), 'khác');
   assert.equal(normLoai('khó làm video'), 'khó với AI video');
+});
+
+/* ---------------- Màn ⑥ — Bible ---------------- */
+
+await test('bóc tách: nhân vật có mặt / chỉ có giọng, đạo cụ và trạng thái, bối cảnh theo thời điểm, ánh sáng từng cảnh', () => {
+  const b = bocTach(kbBible(), chars);
+  const lan = b.nhanVat.find((n) => n.tag === 'lan')!;
+  assert.deepEqual(lan.canh, ['S1', 'S2', 'S3', 'S4']);
+  assert.equal(lan.bo.length, 1);
+  assert.equal(lan.bo[0].tag, 'lan');
+  assert.deepEqual(lan.bo[0].canh, ['S1', 'S2', 'S3', 'S4']);
+  const me = b.nhanVat.find((n) => n.tag === 'me')!;
+  assert.deepEqual(me.canh, [], 'mẹ chỉ nói qua điện thoại');
+  assert.equal(me.coThoai, true);
+  assert.deepEqual(me.bo, []);
+  assert.deepEqual(b.daoCu.map((d) => [d.tag, d.trangThai.join(' → ')]), [['thungxop', 'đóng kín → mở nắp']]);
+  assert.equal(b.boiCanh.length, 1);
+  assert.deepEqual(b.boiCanh[0].bienThe.map((v) => [v.tag, v.thoiDiem, v.canh.length]), [['phongtro', 'khuya', 3], ['phongtrosangsom', 'sáng sớm', 1]]);
+  assert.equal(b.anhSang.length, 4);
+});
+
+await test('bóc tách lại: giữ phần đã làm, mục mới thêm vào, mục không còn dùng được đánh dấu', () => {
+  const old = goodBible();
+  old.anh.thungxop = { imageId: 'img1' };
+  let kb = kbBible();
+  // Bỏ đạo cụ khỏi kịch bản, thêm cảnh buổi chiều
+  kb = suaCanh(kb, 'S2', kb.canh.S2.beats.map((b) => ({ ...b, daoCuMoi: [], thayDoi: [], coMat: ['lan'] })), 3);
+  kb = { ...kb, danY: { ...kb.danY, canh: kb.danY.canh.map((c) => (c.id === 'S3' ? { ...c, thoiDiem: 'chiều', anhSang: 'nắng chiều' } : c)) } };
+  const b = bocTach(kb, chars, old);
+  assert.equal(b.style, old.style);
+  assert.equal(b.nhanVat.find((n) => n.tag === 'lan')!.bo[0].moTa, EN.moTa, 'giữ mô tả đã làm');
+  assert.equal(b.daoCu.find((d) => d.tag === 'thungxop')!.khongDung, true);
+  assert.equal(b.anh.thungxop.imageId, 'img1', 'giữ ảnh');
+  const v = b.boiCanh[0].bienThe;
+  assert.equal(v.find((x) => x.thoiDiem === 'khuya')!.tag, 'phongtro');
+  assert.equal(v.find((x) => x.thoiDiem === 'sáng sớm')!.tag, 'phongtrosangsom', 'giữ tag biến thể cũ');
+  assert.equal(v.find((x) => x.thoiDiem === 'chiều')!.khungAnh, '', 'biến thể mới chờ AI viết');
+  assert.equal(b.anhSang.find((a) => a.canh === 'S3')!.moTa, '', 'ánh sáng đổi thì viết lại');
+  assert.equal(b.anhSang.find((a) => a.canh === 'S1')!.moTa, old.anhSang[0].moTa);
+});
+
+await test('bóc tách: biến thể mới không chiếm tag địa điểm của biến thể cũ', () => {
+  const old = goodBible();
+  let kb = kbBible();
+  // Cảnh 1 đổi sang buổi chiều (thời điểm mới đứng đầu), khuya vẫn còn ở cảnh 2–3
+  kb = { ...kb, danY: { ...kb.danY, canh: kb.danY.canh.map((c) => (c.id === 'S1' ? { ...c, thoiDiem: 'chiều' } : c)) } };
+  const tags = bocTach(kb, chars, old).boiCanh[0].bienThe.map((v) => v.tag);
+  assert.equal(new Set(tags).size, tags.length, `tag trùng: ${tags.join(', ')}`);
+  assert.ok(tags.includes('phongtro'));
+});
+
+await test('bible hợp lệ thì không lỗi; thiếu ảnh chỉ cảnh báo', () => {
+  const r = checkBible(goodBible(), { nhanVat: chars, canhIds: ['S1', 'S2', 'S3', 'S4'] });
+  assert.deepEqual(r.errors, []);
+  assert.ok(r.warnings.some((w) => w.includes('chưa có ảnh')));
+});
+
+await test('bible: tiếng Việt trong ô tiếng Anh, quá dài, thiếu giọng, cảnh chưa có bộ đồ, tên nhân vật trong mô tả, thiếu style', () => {
+  const b = goodBible();
+  b.style = '';
+  b.nhanVat = b.nhanVat.map((n) => (n.tag === 'me' ? { ...n, giong: '' } : { ...n, bo: n.bo.map((x) => ({ ...x, moTa: 'Cô gái gầy tóc ngắn', canh: x.canh.filter((c) => c !== 'S2') })) }));
+  b.daoCu = b.daoCu.map((d) => ({ ...d, moTa: `${'word '.repeat(45)}` }));
+  b.boiCanh = b.boiCanh.map((c) => ({ ...c, moTa: 'The rented room where Lan lives, with a bed.' }));
+  b.anhSang = b.anhSang.map((a, i) => (i === 0 ? { ...a, moTa: '' } : a));
+  const e = checkBible(b, { nhanVat: chars, canhIds: ['S1', 'S2', 'S3', 'S4'] }).errors;
+  for (const want of ['Chưa chọn style', 'phải viết tiếng Anh', 'tối đa 40 từ', 'Giọng của Mẹ', 'cảnh 2 chưa chọn bộ đồ', 'không được nhắc tên nhân vật (Lan)', 'Ánh sáng cảnh 1 còn trống']) {
+    assert.ok(e.some((x) => x.includes(want)), `thiếu lỗi: ${want}\n${e.join('\n')}`);
+  }
+  assert.equal(coTiengViet('A girl'), false);
+});
+
+await test('prompt ảnh do code ghép: mô tả + khung + style; đạo cụ kết bằng câu không chữ; bối cảnh không người, đúng tỉ lệ', () => {
+  const b = goodBible();
+  const d = promptDaoCu(b.daoCu[0], b.style);
+  assert.ok(d.startsWith(b.daoCu[0].moTa.replace(/\.$/, '')));
+  assert.ok(d.includes(b.style.replace(/\.$/, '')));
+  assert.ok(d.endsWith(`${PROP_SUFFIX}.`));
+  const c = promptBoiCanh(b.boiCanh[0], b.boiCanh[0].bienThe[0], b.style, '9:16');
+  assert.ok(c.includes('aspect ratio 9:16') && c.includes('no people'));
+  assert.ok(promptSheet(b.nhanVat[0].bo[0], b.style).includes(EN.moTa.replace(/\.$/, '')));
+  const tags = mucAnh(b, '9:16').map((m) => m.tag);
+  assert.deepEqual(tags, ['lan', 'thungxop', 'phongtro', 'phongtrosangsom'], 'mẹ không có ảnh (chỉ có giọng)');
+});
+
+await test('tác vụ style: đúng 3 phương án tiếng Anh, không tên nhân vật', async () => {
+  const p = (style: string) => ({ style, giaiThich: 'Hợp phim.' });
+  const ok = { phuongAn: [p('Warm natural photorealistic look.'), p('High contrast cinematic look.'), p('Faded vintage film look.')] };
+  const bad = { phuongAn: [p('Ảnh ấm áp'), p('Lan in warm light.')] };
+  const deps = fakeDeps([bad, ok]);
+  const r = await runTask(bibleStyle, bibleInput({ ...goodBible(), style: '' }), 'p1', deps);
+  assert.deepEqual(r.errors, []);
+  assert.equal(r.output.length, 3);
+  assert.ok(deps.prompts[1].includes('Cần đúng 3 phương án'));
+  assert.ok(deps.prompts[1].includes('nhắc tên nhân vật'));
+});
+
+await test('tác vụ nhân vật: bộ đầu mang tag nhân vật, bộ thêm code đặt tag, cảnh theo số thứ tự; chưa có style thì báo', async () => {
+  const empty = bocTach(kbBible(), chars);
+  await assert.rejects(runTask(bibleNhanVat, bibleInput({ ...empty, style: '' }), 'p1', fakeDeps([])), /Chưa chọn style/);
+  const bo = (ten: string, canh: number[]) => ({ ten, canh, moTa: EN.moTa, note: 'Ghi chú.', khungAnh: EN.khung, vaiTro: 'Lan in her outfit' });
+  const raw = { nhanVat: [{ tag: '@lan', giong: '', bo: [bo('đồ đi làm', [1, 2, 3]), bo('đồ ngủ', [4])] }, { tag: 'me', giong: 'warm middle aged female voice', bo: [] }] };
+  const r = await runTask(bibleNhanVat, bibleInput({ ...empty, style: 'Warm natural look.' }), 'p1', fakeDeps([raw]));
+  assert.deepEqual(r.errors, []);
+  const lan = r.output.find((n) => n.tag === 'lan')!;
+  assert.deepEqual(lan.bo.map((x) => [x.tag, x.canh.join(',')]), [['lan', 'S1,S2,S3'], ['landongu', 'S4']]);
+  assert.equal(r.output.find((n) => n.tag === 'me')!.giong, 'warm middle aged female voice');
+});
+
+await test('tác vụ đạo cụ và bối cảnh: điền đúng tag; ánh sáng cùng khoá được chép cùng một câu', async () => {
+  const base = { ...bocTach(kbBible(), chars), style: 'Warm natural look.' };
+  const g = goodBible();
+  const rd = await runTask(bibleDaoCu, bibleInput(base), 'p1', fakeDeps([{ daoCu: g.daoCu.map((d) => ({ tag: d.tag, moTa: d.moTa, note: d.note, khungAnh: d.khungAnh, vaiTro: d.vaiTro })) }]));
+  assert.deepEqual(rd.errors, []);
+  assert.equal(rd.output[0].trangThai.join(' → '), 'đóng kín → mở nắp', 'giữ phần bóc tách');
+  const raw = {
+    boiCanh: g.boiCanh.map((c) => ({ tag: c.tag, moTa: c.moTa, bienThe: c.bienThe.map((v) => ({ tag: v.tag, note: v.note, khungAnh: v.khungAnh, vaiTro: v.vaiTro })) })),
+    anhSang: [
+      { canh: 'S1', moTa: 'Cold white tube light and a warm desk lamp.' },
+      { canh: 'S2', moTa: 'A slightly different sentence.' },
+      { canh: 's3', moTa: 'Another one.' },
+      { canh: 'S4', moTa: 'Soft early morning sunlight.' },
+    ],
+  };
+  const rb = await runTask(bibleBoiCanh, bibleInput(base), 'p1', fakeDeps([raw]));
+  assert.deepEqual(rb.errors, []);
+  assert.deepEqual(rb.output.anhSang.map((a) => a.moTa), ['Cold white tube light and a warm desk lamp.', 'Cold white tube light and a warm desk lamp.', 'Cold white tube light and a warm desk lamp.', 'Soft early morning sunlight.']);
+});
+
+await test('xoá dự án xoá cả ảnh tham chiếu của màn ⑥', async () => {
+  const { imageIdsOf } = await import('../src/lib/store').catch(() => ({ imageIdsOf: null as any }));
+  if (!imageIdsOf) return; // store dùng localStorage — bỏ qua khi chạy ngoài trình duyệt
+  const p = newProjectData('p1', 1) as any;
+  p.sections.bible = { data: { ...emptyBible(), anh: { lan: { imageId: 'a' } } }, meta: { rev: 0, status: 'nhap', basedOn: {}, updatedAt: 1 } };
+  assert.deepEqual(imageIdsOf(p), ['a']);
 });
 
 /* ---------------- Kết quả ---------------- */

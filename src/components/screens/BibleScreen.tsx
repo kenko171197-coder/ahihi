@@ -1,0 +1,296 @@
+// Màn ⑥ — Bible & tham chiếu: bóc tách từ kịch bản chốt (code), style cố định, phần cố định của nhân vật / đạo cụ /
+// bối cảnh / ánh sáng (AI viết, code ghép prompt), ảnh tham chiếu.
+import React, { useRef, useState } from 'react';
+import { ScanLine, Palette, Users, Package, MapPin, Image as ImageIcon, Sparkles, ArrowRight, Wand2 } from 'lucide-react';
+import type { Project, ProjectPatch, SectionKey, Section, BibleData, BibleNhanVat, BibleDaoCu, BibleBoiCanh, AnhSangCanh } from '../../types';
+import { freshSection, editSection, approveSection, keepSection, missingDeps, blockedDeps, depRevs } from '../../../shared/project';
+import { bocTach, emptyBible, mucAnh, khoaAnhSang } from '../../../shared/bible';
+import { checkBible, checkBibleNhanVat, checkBibleDaoCu, checkBibleBoiCanh, checkStyle } from '../../../shared/checks';
+import { runTask } from '../../services/api';
+import { askConfirm } from '../../lib/dialog';
+import { ErrorBox, RunButton } from '../ui';
+import { ScreenIntro, StatusBar, Issues, ReviseBox, useRunner, LockedScreen, UpstreamBanner } from './common';
+import { StylePanel, NhanVatPanel, DaoCuPanel, BoiCanhPanel } from './bible/MucPanels';
+import AnhPanel from './bible/AnhPanel';
+
+interface Props {
+  project: Project;
+  onUpdate: (patch: ProjectPatch) => void;
+  onGo: (k: SectionKey) => void;
+}
+
+type Tab = 'style' | 'nhanVat' | 'daoCu' | 'boiCanh' | 'anh';
+type Nhom = 'nhan-vat' | 'dao-cu' | 'boi-canh';
+const TEN_NHOM: Record<Nhom, string> = { 'nhan-vat': 'nhân vật', 'dao-cu': 'đạo cụ', 'boi-canh': 'bối cảnh và ánh sáng' };
+
+export default function BibleScreen({ project, onUpdate, onGo }: Props) {
+  const { busy, error, notes, setNotes, run } = useRunner();
+  const latestRef = useRef(project);
+  latestRef.current = project;
+  const [tab, setTab] = useState<Tab>('style');
+  const [tienDo, setTienDo] = useState('');
+
+  if (missingDeps(project, 'bible').length) return <LockedScreen project={project} sectionKey="bible" onGo={onGo} />;
+  const blocked = blockedDeps(project, 'bible').length > 0;
+
+  const brief = project.sections.brief!.data;
+  const nhanVat = project.sections.nhanVat!.data.list;
+  const kb = project.sections.kichBan!.data;
+  const order = kb.danY.canh.map((c) => c.id);
+  const section = project.sections.bible;
+  const b = section?.data;
+  const ctx = { nhanVat, canhIds: order };
+  const full = b ? checkBible(b, ctx) : { errors: [], warnings: [] };
+
+  /* ---------- Ghi dữ liệu ---------- */
+
+  const setSection = (fn: (latest: Project) => Section<BibleData> | undefined) => onUpdate((latest) => ({ sections: { ...latest.sections, bible: fn(latest) } }));
+  const edit = (fn: (x: BibleData) => BibleData) =>
+    setSection((latest) => {
+      const s = latest.sections.bible;
+      return s ? editSection(s, fn(s.data), Date.now()) : s;
+    });
+
+  /** Bóc tách (lại) từ kịch bản chốt: giữ phần đã làm của mục còn dùng. Không gọi AI. */
+  const bocTachLai = () => {
+    const readRevs = depRevs(project, 'bible');
+    setSection((latest) => {
+      const k = latest.sections.kichBan!.data;
+      const chars = latest.sections.nhanVat!.data.list;
+      return freshSection(latest, 'bible', bocTach(k, chars, latest.sections.bible?.data || emptyBible()), Date.now(), readRevs);
+    });
+  };
+
+  /* ---------- AI ---------- */
+
+  const input = (p: Project, yeuCau = '') => ({
+    brief: p.sections.brief!.data,
+    nhanVat: p.sections.nhanVat!.data.list,
+    kichBan: { danY: p.sections.kichBan!.data.danY, canh: p.sections.kichBan!.data.canh },
+    bible: p.sections.bible!.data,
+    sua: yeuCau ? { yeuCau } : undefined,
+  });
+
+  /** Hỏi trước khi ghi đè nếu bạn đã sửa trong lúc AI chạy. */
+  const changedSince = async (startedAt: number | undefined, what: string) =>
+    latestRef.current.sections.bible?.meta.updatedAt !== startedAt &&
+    !(await askConfirm(`Bạn đã sửa màn 6 trong lúc AI đang viết ${what}. Thay phần ${what} bằng kết quả mới của AI?`, { okLabel: 'Thay bằng kết quả mới', cancelLabel: 'Giữ bản đang sửa' }));
+
+  const goiStyle = (yeuCau = '') =>
+    run('style', async () => {
+      const startedAt = latestRef.current.sections.bible?.meta.updatedAt;
+      const r = await runTask<{ style: string; giaiThich: string }[]>('bible-style', input(latestRef.current, yeuCau), project.id);
+      if (await changedSince(startedAt, 'style')) return;
+      edit((x) => ({ ...x, phuongAnStyle: r.output }));
+      return r;
+    });
+
+  /** Gọi AI cho một nhóm và ghi kết quả (giữ các mục "không còn dùng"). Trả lỗi còn lại. */
+  const goiNhom = async (nhom: Nhom, yeuCau = ''): Promise<string[] | null> => {
+    const startedAt = latestRef.current.sections.bible?.meta.updatedAt;
+    const r = await runTask<any>(`bible-${nhom}`, input(latestRef.current, yeuCau), project.id);
+    if (await changedSince(startedAt, TEN_NHOM[nhom])) return null;
+    edit((x) => {
+      if (nhom === 'nhan-vat') return { ...x, nhanVat: [...(r.output as BibleNhanVat[]), ...x.nhanVat.filter((n) => n.khongDung)] };
+      if (nhom === 'dao-cu') return { ...x, daoCu: [...(r.output as BibleDaoCu[]), ...x.daoCu.filter((d) => d.khongDung)] };
+      const o = r.output as { boiCanh: BibleBoiCanh[]; anhSang: AnhSangCanh[] };
+      return { ...x, boiCanh: [...o.boiCanh, ...x.boiCanh.filter((c) => c.khongDung)], anhSang: o.anhSang };
+    });
+    return r.errors.map((e) => `${TEN_NHOM[nhom][0].toUpperCase()}${TEN_NHOM[nhom].slice(1)}: ${e}`);
+  };
+
+  const viet = (nhom: Nhom, yeuCau = '') =>
+    run(nhom, async () => {
+      const errors = await goiNhom(nhom, yeuCau);
+      return errors ? { errors } : undefined;
+    });
+
+  /** Viết lần lượt nhân vật → đạo cụ → bối cảnh. */
+  const vietTatCa = () =>
+    run('tat-ca', async () => {
+      const errors: string[] = [];
+      try {
+        const nhoms: Nhom[] = ['nhan-vat', ...(latestRef.current.sections.bible!.data.daoCu.some((d) => !d.khongDung) ? (['dao-cu'] as Nhom[]) : []), 'boi-canh'];
+        for (let k = 0; k < nhoms.length; k++) {
+          setTienDo(`AI đang viết ${TEN_NHOM[nhoms[k]]} (${k + 1}/${nhoms.length})…`);
+          const e = await goiNhom(nhoms[k]);
+          if (e === null) break;
+          errors.push(...e);
+          await new Promise((res) => setTimeout(res, 30)); // chờ giao diện nhận bản mới
+        }
+      } finally {
+        setTienDo('');
+      }
+      return { errors };
+    });
+
+  const approve = () => setSection((latest) => (latest.sections.bible ? approveSection(latest, 'bible', latest.sections.bible, Date.now()) : undefined));
+  const keep = () => setSection((latest) => (latest.sections.bible ? keepSection(latest, 'bible', latest.sections.bible, Date.now()) : undefined));
+
+  /* ---------- Hiển thị ---------- */
+
+  const noStyle = !b?.style.trim();
+  const aiOff = !!busy || blocked;
+  const tagNgoai = (x: BibleData) => new Set([...x.daoCu.map((d) => d.tag), ...x.boiCanh.flatMap((c) => c.bienThe.map((v) => v.tag))]);
+  const per = b
+    ? {
+        style: { errors: b.style ? checkStyle(b.style, nhanVat) : ['Chưa chọn style.'], warnings: [] as string[] },
+        nhanVat: checkBibleNhanVat(b.nhanVat, ctx, tagNgoai(b)),
+        daoCu: checkBibleDaoCu(b.daoCu, ctx),
+        boiCanh: checkBibleBoiCanh(b.boiCanh, b.anhSang, ctx),
+      }
+    : null;
+  const muc = b ? mucAnh(b, brief.tiLe) : [];
+  const thieuAnh = muc.filter((m) => !m.khongDung && !b?.anh[m.tag]?.imageId).length;
+  const tabs: { k: Tab; label: string; icon: React.ElementType; sub: string; loi: number }[] = b
+    ? [
+        { k: 'style', label: 'Style', icon: Palette, sub: b.style ? 'đã chọn' : 'chưa chọn', loi: per!.style.errors.length },
+        { k: 'nhanVat', label: 'Nhân vật', icon: Users, sub: `${b.nhanVat.length} người`, loi: per!.nhanVat.errors.length },
+        { k: 'daoCu', label: 'Đạo cụ', icon: Package, sub: `${b.daoCu.length} món`, loi: per!.daoCu.errors.length },
+        { k: 'boiCanh', label: 'Bối cảnh & ánh sáng', icon: MapPin, sub: `${b.boiCanh.length} nơi, ${b.anhSang.length} cảnh`, loi: per!.boiCanh.errors.length },
+        { k: 'anh', label: 'Ảnh tham chiếu', icon: ImageIcon, sub: thieuAnh ? `thiếu ${thieuAnh} ảnh` : 'đủ ảnh', loi: 0 },
+      ]
+    : [];
+  const issuesOf = (k: Tab) => (per && k !== 'anh' ? per[k] : null);
+  const nhomOf: Partial<Record<Tab, Nhom>> = { nhanVat: 'nhan-vat', daoCu: 'dao-cu', boiCanh: 'boi-canh' };
+
+  return (
+    <div className="space-y-6">
+      <ScreenIntro no={6} title="Bible & tham chiếu">
+        Mọi thứ cố định của phim: style, nhân vật (bộ đồ, giọng), đạo cụ, bối cảnh, ánh sáng từng cảnh và ảnh tham chiếu. Màn 8 chép nguyên văn phần này vào prompt video, nên nhân vật, đồ vật và căn phòng giữ giống nhau ở mọi beat.
+      </ScreenIntro>
+
+      <UpstreamBanner project={project} sectionKey="bible" onGo={onGo} />
+
+      {!b && (
+        <div className="bg-white border border-gray-200 rounded-2xl p-5 space-y-3">
+          <p className="text-sm text-gray-700">
+            Bước đầu: app đọc kịch bản đã chốt và lập danh sách nhân vật, đạo cụ, bối cảnh, ánh sáng từng cảnh. Không gọi AI, không tốn tiền.
+          </p>
+          <RunButton onClick={bocTachLai} busy={false} busyLabel="" icon={ScanLine} disabled={blocked}>
+            Bóc tách từ kịch bản
+          </RunButton>
+        </div>
+      )}
+
+      <ErrorBox message={error} />
+      <Issues errors={notes.errors} warnings={[]} title={notes.errors.length ? 'AI đã được gửi lại 2 lần nhưng kết quả vẫn còn lỗi — bạn sửa tay hoặc viết lại:' : undefined} />
+
+      {b && (
+        <>
+          <div className="flex flex-wrap gap-2">
+            <RunButton onClick={vietTatCa} busy={busy === 'tat-ca'} busyLabel={tienDo || 'AI đang viết…'} icon={Sparkles} disabled={aiOff || noStyle}>
+              AI viết tất cả (nhân vật → đạo cụ → bối cảnh)
+            </RunButton>
+            <button onClick={bocTachLai} disabled={!!busy || blocked} className="px-4 py-2.5 rounded-xl bg-gray-100 hover:bg-primary-100 font-bold flex items-center gap-2 disabled:opacity-50">
+              <ScanLine className="w-4 h-4" /> Bóc tách lại từ kịch bản
+            </button>
+          </div>
+          {noStyle && <p className="text-sm text-amber-900">Chọn style trước (tab Style) — mọi phần cố định đều viết theo style này.</p>}
+
+          <nav aria-label="Các phần của bible" className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+            {tabs.map((t) => (
+              <button
+                key={t.k}
+                onClick={() => {
+                  setTab(t.k);
+                  setNotes({ errors: [], warnings: [] });
+                }}
+                aria-current={tab === t.k ? 'page' : undefined}
+                className={`text-left rounded-xl px-3 py-2.5 border font-bold ${tab === t.k ? 'bg-black border-black text-primary-400' : 'bg-white border-gray-200 text-black hover:border-primary-400'}`}
+              >
+                <span className="flex items-center gap-1.5 text-sm">
+                  <t.icon className="w-4 h-4" /> {t.label}
+                </span>
+                <span className={`block text-xs font-normal ${tab === t.k ? 'text-primary-200' : 'text-gray-500'}`}>
+                  {t.sub}
+                  {t.loi > 0 && <span className={tab === t.k ? '' : 'text-red-700'}> · {t.loi} lỗi</span>}
+                </span>
+              </button>
+            ))}
+          </nav>
+
+          {tab === 'style' && (
+            <div className="space-y-4">
+              <RunButton onClick={() => goiStyle()} busy={busy === 'style'} busyLabel="AI đang nghĩ style…" icon={Palette} variant={b.phuongAnStyle.length ? 'ghost' : 'dark'} disabled={aiOff}>
+                {b.phuongAnStyle.length ? 'Đề xuất lại 3 phương án' : 'AI đề xuất 3 phương án style'}
+              </RunButton>
+              <StylePanel b={b} onStyle={(style) => edit((x) => ({ ...x, style }))} />
+              {b.phuongAnStyle.length > 0 && <ReviseBox onSubmit={(t) => goiStyle(t)} busy={busy === 'style'} disabled={aiOff} placeholder="VD: ấm hơn, giống phim Hàn những năm 2000…" />}
+            </div>
+          )}
+
+          {nhomOf[tab] && (
+            <div className="flex flex-wrap gap-2">
+              <RunButton onClick={() => viet(nhomOf[tab]!)} busy={busy === nhomOf[tab]} busyLabel={`AI đang viết ${TEN_NHOM[nhomOf[tab]!]}…`} icon={Wand2} disabled={aiOff || noStyle || (tab === 'daoCu' && !b.daoCu.some((d) => !d.khongDung))}>
+                AI viết {TEN_NHOM[nhomOf[tab]!]}
+              </RunButton>
+            </div>
+          )}
+
+          {tab === 'nhanVat' && (
+            <NhanVatPanel
+              b={b}
+              order={order}
+              onChange={(tag, fn) => edit((x) => ({ ...x, nhanVat: x.nhanVat.map((n) => (n.tag === tag ? fn(n) : n)) }))}
+              onRemove={(tag) => edit((x) => ({ ...x, nhanVat: x.nhanVat.filter((n) => n.tag !== tag) }))}
+            />
+          )}
+          {tab === 'daoCu' && (
+            <DaoCuPanel
+              b={b}
+              order={order}
+              onChange={(tag, patch) => edit((x) => ({ ...x, daoCu: x.daoCu.map((d) => (d.tag === tag ? { ...d, ...patch } : d)) }))}
+              onRemove={(tag) => edit((x) => ({ ...x, daoCu: x.daoCu.filter((d) => d.tag !== tag) }))}
+            />
+          )}
+          {tab === 'boiCanh' && (
+            <BoiCanhPanel
+              b={b}
+              order={order}
+              tiLe={brief.tiLe}
+              onChange={(tag, patch) => edit((x) => ({ ...x, boiCanh: x.boiCanh.map((c) => (c.tag === tag ? { ...c, ...patch } : c)) }))}
+              onBienThe={(tag, vtag, patch) => edit((x) => ({ ...x, boiCanh: x.boiCanh.map((c) => (c.tag === tag ? { ...c, bienThe: c.bienThe.map((v) => (v.tag === vtag ? { ...v, ...patch } : v)) } : c)) }))}
+              onAnhSang={(a, moTa) => edit((x) => ({ ...x, anhSang: x.anhSang.map((y) => (khoaAnhSang(y) === khoaAnhSang(a) ? { ...y, moTa } : y)) }))}
+              onRemove={(tag) => edit((x) => ({ ...x, boiCanh: x.boiCanh.filter((c) => c.tag !== tag) }))}
+            />
+          )}
+          {tab === 'anh' && <AnhPanel projectId={project.id} muc={muc} anh={b.anh} onSet={(patch) => edit((x) => ({ ...x, anh: { ...x.anh, ...patch } }))} />}
+
+          {nhomOf[tab] && <ReviseBox onSubmit={(t) => viet(nhomOf[tab]!, t)} busy={busy === nhomOf[tab]} disabled={aiOff || noStyle} placeholder="VD: Lan mặc áo khoác jeans thay vì áo len, giọng trầm hơn…" />}
+          {issuesOf(tab) && <Issues errors={issuesOf(tab)!.errors} warnings={issuesOf(tab)!.warnings} />}
+
+          {full.warnings.some((w) => w.includes('chưa có ảnh')) && tab !== 'anh' && (
+            <p className="text-sm text-gray-600">
+              {full.warnings.find((w) => w.includes('chưa có ảnh'))}{' '}
+              <button onClick={() => setTab('anh')} className="underline font-bold text-black">
+                Sang tab Ảnh tham chiếu
+              </button>
+            </p>
+          )}
+
+          <StatusBar project={project} sectionKey="bible" blocking={full.errors} onApprove={approve} onKeep={keep} onRegenerate={bocTachLai} busy={!!busy} />
+          {section?.meta.status !== 'duyet' && full.errors.length > 0 && (
+            <details className="text-sm">
+              <summary className="cursor-pointer font-bold text-black">Điều kiện duyệt màn 6: còn {full.errors.length} việc</summary>
+              <ul className="mt-2 list-disc pl-5 text-red-800 space-y-0.5">
+                {full.errors.slice(0, 40).map((e, i) => (
+                  <li key={i}>{e}</li>
+                ))}
+                {full.errors.length > 40 && <li>… và {full.errors.length - 40} việc khác.</li>}
+              </ul>
+            </details>
+          )}
+
+          {section?.meta.status === 'duyet' && !blocked && (
+            <div className="flex justify-end">
+              <button onClick={() => onGo('phanCanh')} className="py-3 px-6 rounded-xl bg-black hover:bg-gray-800 text-primary-400 font-bold flex items-center gap-2">
+                Sang màn 7: Phân cảnh <ArrowRight className="w-5 h-5" />
+              </button>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}

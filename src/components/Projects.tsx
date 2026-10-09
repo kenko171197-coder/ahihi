@@ -9,7 +9,7 @@ import NhanVatScreen from './screens/NhanVatScreen';
 import TreatmentScreen from './screens/TreatmentScreen';
 import KichBanScreen from './screens/KichBanScreen';
 import RaSoatScreen from './screens/RaSoatScreen';
-import LegacyDesignScreen from './screens/LegacyDesignScreen';
+import BibleScreen from './screens/BibleScreen';
 import PlaceholderStep from './steps/PlaceholderStep';
 
 interface Props {
@@ -32,8 +32,6 @@ const PLANNED: Partial<Record<SectionKey, { title: string; items: string[] }>> =
 type ScreenState = 'duyet' | 'nhap' | 'cu' | 'khoa' | 'trong';
 
 function screenState(p: Project, key: SectionKey): ScreenState {
-  // Màn ⑥ đang dùng bước thiết kế cũ (tạm), mở được ngay
-  if (key === 'bible') return 'trong';
   if (missingDeps(p, key).length) return 'khoa';
   const s = getSection(p, key);
   if (!s) return 'trong';
@@ -56,10 +54,6 @@ function Workspace({ project, onUpdate, onDelete, onBack }: { project: Project; 
   const goTo = (key: SectionKey) => {
     onUpdate({ manHinh: key });
     window.scrollTo({ top: 0 });
-  };
-  const next = () => {
-    const i = SCREENS.findIndex((s) => s.key === current.key);
-    if (i < SCREENS.length - 1) goTo(SCREENS[i + 1].key);
   };
 
   return (
@@ -122,7 +116,7 @@ function Workspace({ project, onUpdate, onDelete, onBack }: { project: Project; 
       {current.key === 'treatment' && <TreatmentScreen project={project} onUpdate={onUpdate} onGo={goTo} />}
       {current.key === 'kichBan' && <KichBanScreen project={project} onUpdate={onUpdate} onGo={goTo} />}
       {current.key === 'raSoat' && <RaSoatScreen project={project} onUpdate={onUpdate} onGo={goTo} />}
-      {current.key === 'bible' && <LegacyDesignScreen project={project} onUpdate={onUpdate} onNext={next} />}
+      {current.key === 'bible' && <BibleScreen project={project} onUpdate={onUpdate} onGo={goTo} />}
       {PLANNED[current.key] && <PlaceholderStep title={`${current.no}. ${PLANNED[current.key]!.title}`} items={PLANNED[current.key]!.items} />}
 
       <div className="pt-6 border-t border-gray-100">

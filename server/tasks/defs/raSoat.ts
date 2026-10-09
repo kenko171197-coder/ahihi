@@ -35,7 +35,7 @@ export function normMuc(v: string): MucVanDe {
   return 'vua';
 }
 
-const parseKichBan = (v: unknown, chars: Character[]): Pick<KichBanData, 'danY' | 'canh'> => {
+export const parseKichBan = (v: unknown, chars: Character[]): Pick<KichBanData, 'danY' | 'canh'> => {
   const o = obj(v);
   const danY: DanY = parseDanY(o.danY);
   const src = obj(o.canh);
