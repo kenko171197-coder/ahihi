@@ -25,6 +25,8 @@ Người dùng là nhà làm phim, không phải lập trình viên: **trả l�
 |---|---|
 | `shared/project.ts` | Mô hình dữ liệu dự án: `SectionKey`, `DEPS` (phần nào dựa trên phần nào), `SCREENS`, trạng thái nháp/duyệt, `rev`, `basedOn`; hàm `freshSection / editSection / approveSection / keepSection / staleDeps / isStale / missingDeps / blockedDeps` |
 | `shared/kichBan.ts` | Kịch bản: mã cảnh / beat cố định (`ganMaBeat`), trạng thái theo dòng (`parseTrangThai`), trạng thái đầu beat (`dauBeat`), cờ "cần xem lại" theo cảnh (`dauVaoCanh`, `tinhTrangCanh`), đạo cụ đã khai (`daoCuTruoc`), ghi cảnh (`ghiCanh` = kết quả AI / "vẫn đúng", `suaCanh` = sửa tay) |
+| `shared/bible.ts` | Bible (màn ⑥): bóc tách từ kịch bản chốt (`bocTach`, giữ phần đã làm khi bóc lại), ghép prompt ảnh (`promptNhanVat / promptSheet / promptDaoCu / promptBoiCanh`), danh sách ảnh tham chiếu (`mucAnh`), ánh sáng cùng khoá dùng chung câu (`dongBoAnhSang`) |
+| `server/anhThamChieu.ts` | Quét ảnh tham chiếu gán @tag (gọi AI kèm ảnh, route `/api/match-images`) |
 | `shared/checks.ts` | Code kiểm dùng chung cho server (kiểm kết quả AI) và giao diện (kiểm bản sửa tay) |
 | `server/tasks/framework.ts` | Khung chung mọi tác vụ AI: khuôn prompt → gọi AI với khuôn trả về → `normalize` → `check` → sai thì gửi lại kèm lỗi (tối đa 2 lần) → nhật ký |
 | `server/tasks/defs/*.ts` | Từng tác vụ (`TaskDef`): `parseInput`, `genreId`, `vars`, `schema`, `normalize`, `check`, `isEmpty` |
@@ -57,4 +59,5 @@ Người dùng là nhà làm phim, không phải lập trình viên: **trả l�
 
 - **Lượt 1 — xong:** nền móng + màn ① Ý tưởng & định hướng, ② Nhân vật, ③ Treatment. Màn ⑥ tạm dùng bước thiết kế cũ.
 - **Lượt 2 — xong:** màn ④ Kịch bản (dàn ý cảnh `dan-y-canh` + viết beat từng cảnh `viet-canh`) và ⑤ Rà soát (`ra-soat`, sửa đề xuất bằng `viet-canh` chế độ sửa, ghi thẳng vào ④). Màn ⑥ ⑦ dựa trên ⑤. Thiết kế: `docs/LUOT-2.md`.
-- **Lượt 3 — tiếp theo:** ⑥ Bible & tham chiếu (bóc tách tự động, bối cảnh, ánh sáng theo cảnh, giọng) + ⑦ Phân cảnh. Lượt 4: ⑧ Prompt + frame nối + xuất file.
+- **Lượt 3a — xong:** màn ⑥ Bible & tham chiếu mới (bóc tách, style cố định, `bible-style`, `bible-nhan-vat` gồm giọng + bộ đồ, `bible-dao-cu`, `bible-boi-canh` gồm ánh sáng từng cảnh, ảnh tham chiếu). Màn ⑥ tạm cũ đã gỡ. Thiết kế: `docs/LUOT-3.md`.
+- **Lượt 3b — tiếp theo:** ⑦ Phân cảnh (trình bày thiết kế trước, sau khi người dùng thử màn ⑥). Lượt 4: ⑧ Prompt + frame nối + xuất file.

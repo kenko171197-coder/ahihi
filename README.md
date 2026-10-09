@@ -1,4 +1,4 @@
-# Xưởng phim AI — lượt 2
+# Xưởng phim AI — lượt 3a
 
 Đi từ ý tưởng tới prompt video cho Gemini Omni Flash, qua 3 giai đoạn, 8 màn. Mọi quyết định thiết kế: `docs/QUYET-DINH.md`.
 
@@ -24,14 +24,23 @@
 - **Màn ⑤ Rà soát:** AI chấm theo thang của thể loại (app tự cộng điểm) và nêu vấn đề. Bạn nhận / bỏ qua (có ghi lý do) từng đề xuất. Đề xuất được nhận → AI viết lại đúng cảnh đó → bạn xem bản sửa cạnh bản cũ → nhận thì ghi thẳng vào màn ④ (màn ④ tự duyệt lại nếu không còn lỗi). Duyệt được khi không còn vấn đề mức "cao" chưa xử lý.
 - Màn ⑥ ⑦ giờ dựa trên kịch bản đã qua ⑤.
 
-Màn ⑥ ⑦ ⑧: lượt 3–4.
+## Đã làm ở lượt 3a
+
+- **Màn ⑥ Bible & tham chiếu** (thay bước Nhân vật & đạo cụ cũ):
+  - **Bóc tách** từ kịch bản chốt (app tự làm, không tốn tiền): nhân vật (có mặt / chỉ có giọng), đạo cụ và các trạng thái, bối cảnh — mỗi cặp địa điểm + thời điểm một ảnh, ánh sáng từng cảnh.
+  - **Style** cố định cả phim: tự gõ hoặc AI đề xuất 3 phương án.
+  - AI viết **phần cố định** (tiếng Anh): nhân vật (giọng, các bộ đồ), đạo cụ, bối cảnh, câu ánh sáng từng cảnh. App tự ghép prompt ảnh: mô tả cố định + khung ảnh + style (+ "không chữ" với đạo cụ, "không người" với bối cảnh).
+  - **Ảnh tham chiếu**: gửi ảnh theo lô, AI quét gán @tag (cả bối cảnh), mỗi ảnh có vai trò cho màn ⑧.
+  - Kịch bản đổi → "Bóc tách lại": giữ phần đã làm, thêm mục mới, đánh dấu mục không còn dùng.
+
+Màn ⑦ ⑧: lượt 3b–4.
 
 ## Cấu trúc
 
 | Thư mục | Nội dung |
 |---|---|
 | `prompts/` | Mỗi tác vụ AI một file khung prompt. Sửa file là có hiệu lực ngay ở lần gọi sau |
-| `knowledge/the-loai/` | Mỗi thể loại một file. Dòng `- **Các phần:** …` là các phần bắt buộc của treatment; `- **Độ dài beat:** 4–8 giây` là khoảng giây khuyên cho mỗi beat; bảng "Chấm nhanh" ở mục Rà soát là thang chấm của màn ⑤ |
+| `knowledge/the-loai/` | Mỗi thể loại một file. Mục "Hình ảnh" dùng ở màn ⑥. Dòng `- **Các phần:** …` là các phần bắt buộc của treatment; `- **Độ dài beat:** 4–8 giây` là khoảng giây khuyên cho mỗi beat; bảng "Chấm nhanh" ở mục Rà soát là thang chấm của màn ⑤ |
 | `shared/` | Mô hình dữ liệu và code kiểm, dùng chung cho server và giao diện |
 | `server/tasks/` | Khung tác vụ AI (`framework.ts`), từng tác vụ (`defs/`), danh sách tác vụ (`registry.ts`) |
 | `src/components/screens/` | Các màn |
