@@ -1,8 +1,9 @@
 // Code kiểm dùng chung: server kiểm kết quả AI, giao diện kiểm bản người dùng sửa tay. Thuần, không thư viện ngoài.
-import type { AnhSangCanh, BibleBoiCanh, BibleData, BibleDaoCu, BibleNhanVat, Beat, CanhDanY, Character, DanY, DaoCu, DongTrangThai, KichBanData, MucThoai, NhacNen, RaSoatData, TreatmentData } from './project';
+import type { PhanCanhCanh, PhanCanhData, AnhSangCanh, BibleBoiCanh, BibleData, BibleDaoCu, BibleNhanVat, Beat, CanhDanY, Character, DanY, DaoCu, DongTrangThai, KichBanData, MucThoai, NhacNen, RaSoatData, TreatmentData } from './project';
 import { BEAT_MAX, BEAT_MIN, PHAN_DOAN_TU_GIAY, fmtGiay, maxNhanVat } from './project';
 import { beatsOf, daoCuTruoc, tinhTrangCanh, tongGiayBeat, viTriCanh } from './kichBan';
 import { bocTach } from './bible';
+import { CO_CANH, GOC_MAY, CHUYEN_DONG, tinhTrangPhanCanh } from './phanCanh';
 
 export interface CheckResult {
   errors: string[];
@@ -575,4 +576,88 @@ export function checkBible(b: BibleData, ctx: BibleCtx): CheckResult {
   ].filter((t) => !b.anh[t]?.imageId);
   if (thieuAnh.length) warnings.push(`Còn ${thieuAnh.length} tag chưa có ảnh tham chiếu: ${thieuAnh.map((t) => `@${t}`).join(', ')}. Màn 8 sẽ cần đủ ảnh.`);
   return { errors, warnings };
+}
+
+/* ============================ MÀN ⑦ — PHÂN CẢNH ============================ */
+
+const ANH_SANG_RE = /(ánh sáng|ánh đèn|đèn tuýp|đèn bàn|nắng|ngược sáng|tối om|sáng rực)/i;
+/** Nói không cần thấy mặt (qua điện thoại, giọng đọc…). */
+const GIONG_NGOAI_RE = /(điện thoại|loa|giọng đọc|lồng tiếng|qua tin nhắn|thư|ngoài khung|ngoài hình)/i;
+
+export interface PhanCanhCtx {
+  /** Mọi tên và tag địa điểm (để cảnh báo ô Mô tả tả lại bối cảnh) */
+  diaDiem: string[];
+}
+
+/** Kiểm shot của một cảnh. */
+export function checkPhanCanhCanh(beats: Beat[], pc: PhanCanhCanh | undefined, ctx: PhanCanhCtx): CheckResult & { theoBeat: Record<string, CheckResult> } {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  const theoBeat: Record<string, CheckResult> = {};
+  const dd = ctx.diaDiem.map((x) => normName(x)).filter((x) => x.length > 2);
+  beats.forEach((b, i) => {
+    const e: string[] = [];
+    const w: string[] = [];
+    const shots = pc?.beats[b.id]?.shots || [];
+    if (!shots.length) e.push('Chưa có shot nào.');
+    const sum = shots.reduce((s, x) => s + (Number.isFinite(x.giay) ? x.giay : 0), 0);
+    if (shots.length && Math.abs(sum - b.giay) > 0.001) e.push(`Tổng giây các shot là ${sum}s, beat dài ${b.giay}s — phải bằng nhau.`);
+    const dem = new Map<number, number>();
+    shots.forEach((s, k) => {
+      const L = `Shot ${k + 1}`;
+      if (!Number.isFinite(s.giay) || s.giay < 1) e.push(`${L} dài ${Number.isFinite(s.giay) ? s.giay : '—'}s — mỗi shot ít nhất 1 giây.`);
+      else if (Math.abs(s.giay * 2 - Math.round(s.giay * 2)) > 0.001) e.push(`${L}: số giây đi theo bước 0,5 (ví dụ 1,5 hoặc 2).`);
+      else if (s.giay < 1.5) w.push(`${L} chỉ ${s.giay}s — rất ngắn, máy video có thể bỏ qua.`);
+      if (!s.moTa.trim()) e.push(`${L} chưa có mô tả.`);
+      if (!CO_CANH.some((x) => x.id === s.coCanh)) e.push(`${L}: cỡ cảnh không có trong danh sách.`);
+      if (!GOC_MAY.some((x) => x.id === s.gocMay)) e.push(`${L}: góc máy không có trong danh sách.`);
+      if (!CHUYEN_DONG.some((x) => x.id === s.chuyenDong)) e.push(`${L}: chuyển động máy không có trong danh sách.`);
+      s.trongKhung.filter((t) => !b.coMat.includes(t)).forEach((t) => e.push(`${L}: @${t} không có mặt ở beat này.`));
+      s.thoai.forEach((k2) => {
+        if (k2 < 0 || k2 >= b.thoai.length) e.push(`${L}: câu thoại số ${k2 + 1} không có trong beat.`);
+        dem.set(k2, (dem.get(k2) || 0) + 1);
+      });
+      const words = s.thoai.reduce((n, k2) => n + soTu(b.thoai[k2]?.cau || ''), 0);
+      if (Number.isFinite(s.giay) && s.giay > 0 && words > CHU_MOI_GIAY * s.giay) w.push(`${L}: thoại ${words} chữ, dài so với ${s.giay}s (nên tối đa khoảng ${Math.floor(CHU_MOI_GIAY * s.giay)} chữ).`);
+      if (ANH_SANG_RE.test(s.moTa)) w.push(`${L}: mô tả nhắc ánh sáng ("${ANH_SANG_RE.exec(s.moTa)![0]}") — ánh sáng đã có ở bible, không cần tả lại.`);
+      const m = normName(s.moTa);
+      const trung = dd.find((x) => ` ${m} `.includes(` ${x} `));
+      if (trung) w.push(`${L}: mô tả nhắc tên địa điểm — bối cảnh đã có ở bible, không cần tả lại.`);
+      s.thoai.forEach((k2) => {
+        const t = b.thoai[k2];
+        if (t && b.coMat.includes(t.ai) && !s.trongKhung.includes(t.ai) && !GIONG_NGOAI_RE.test(t.cachNoi)) w.push(`${L}: @${t.ai} nói "${t.cau.slice(0, 30)}…" nhưng không ở trong khung.`);
+      });
+    });
+    b.thoai.forEach((t, k2) => {
+      const n = dem.get(k2) || 0;
+      if (shots.length && n === 0) e.push(`Câu thoại ${k2 + 1} ("${t.cau.slice(0, 30)}") chưa thuộc shot nào.`);
+      if (n > 1) e.push(`Câu thoại ${k2 + 1} đang thuộc ${n} shot — mỗi câu thuộc đúng một shot.`);
+    });
+    theoBeat[b.id] = { errors: e, warnings: w };
+    errors.push(...e.map((x) => `Beat ${i + 1} (${b.id}): ${x}`));
+    warnings.push(...w.map((x) => `Beat ${i + 1} (${b.id}): ${x}`));
+  });
+  return { errors, warnings, theoBeat };
+}
+
+/** Kiểm cả màn ⑦ (điều kiện duyệt). */
+export function checkPhanCanh(pc: PhanCanhData, kb: KichBanData): CheckResult & { theoCanh: Record<string, ReturnType<typeof checkPhanCanhCanh>> } {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  const theoCanh: Record<string, ReturnType<typeof checkPhanCanhCanh>> = {};
+  const diaDiem = Array.from(new Set(kb.danY.canh.flatMap((c) => [c.diaDiem, c.tagDiaDiem]).filter(Boolean)));
+  kb.danY.canh.forEach((c, i) => {
+    const L = `Cảnh ${i + 1}`;
+    const st = tinhTrangPhanCanh(pc, kb, c.id);
+    if (st === 'chua-lam') {
+      errors.push(`${L} chưa phân cảnh.`);
+      return;
+    }
+    if (st === 'can-xem-lai') errors.push(`${L} cần xem lại (beat của cảnh đã đổi ở màn 4 / 5) — làm lại, hoặc bấm "Vẫn đúng".`);
+    const r = checkPhanCanhCanh(beatsOf(kb, c.id), pc.canh[c.id], { diaDiem });
+    theoCanh[c.id] = r;
+    errors.push(...r.errors.map((e) => `${L}: ${e}`));
+    warnings.push(...r.warnings.map((e) => `${L}: ${e}`));
+  });
+  return { errors, warnings, theoCanh };
 }

@@ -6,6 +6,7 @@ import { treatment } from './defs/treatment';
 import { danYCanh, vietCanh } from './defs/kichBan';
 import { raSoat } from './defs/raSoat';
 import { bibleStyle, bibleNhanVat, bibleDaoCu, bibleBoiCanh } from './defs/bible';
+import { phanCanh } from './defs/phanCanh';
 
 export const TASK_DEFS: Record<string, TaskDef<any, any>> = {
   [hoiLai.id]: hoiLai,
@@ -19,4 +20,5 @@ export const TASK_DEFS: Record<string, TaskDef<any, any>> = {
   [bibleNhanVat.id]: bibleNhanVat,
   [bibleDaoCu.id]: bibleDaoCu,
   [bibleBoiCanh.id]: bibleBoiCanh,
+  [phanCanh.id]: phanCanh,
 };

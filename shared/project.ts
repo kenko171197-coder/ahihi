@@ -316,6 +316,46 @@ export interface RaSoatData {
   daBoQua: { moTa: string; lyDo: string; at: number }[];
 }
 
+/* ============================ MÀN ⑦ — PHÂN CẢNH ============================ */
+
+export type CoCanh = 'toan' | 'toan-trung' | 'trung' | 'can-trung' | 'can' | 'dac-ta';
+export type GocMay = 'ngang' | 'thap' | 'cao' | 'tren-xuong' | 'qua-vai' | 'goc-nhin';
+export type ChuyenDong = 'tinh' | 'lia-ngang' | 'lia-doc' | 'day-vao' | 'keo-ra' | 'di-theo' | 'cam-tay';
+
+export interface Shot {
+  /** Mã cố định trong beat: B007.1, B007.2… (không đánh lại số) */
+  id: string;
+  /** Số giây, bước 0,5 */
+  giay: number;
+  coCanh: CoCanh;
+  gocMay: GocMay;
+  chuyenDong: ChuyenDong;
+  /** Mô tả tiếng Việt — nguồn duy nhất cho câu hành động ở màn ⑧ */
+  moTa: string;
+  /** Tag người / vật trong khung */
+  trongKhung: string[];
+  /** Vị trí (0, 1, …) các câu thoại của beat nói trong shot này */
+  thoai: number[];
+}
+
+export interface PhanCanhBeat {
+  shots: Shot[];
+  /** Số tiếp theo cho mã shot của beat — chỉ tăng */
+  soShot: number;
+}
+
+export interface PhanCanhCanh {
+  /** Shot theo id beat */
+  beats: Record<string, PhanCanhBeat>;
+  /** Dấu các beat của cảnh lúc phân cảnh — đổi → cảnh cần xem lại */
+  dauVao: string;
+  updatedAt: number;
+}
+
+export interface PhanCanhData {
+  canh: Record<string, PhanCanhCanh>;
+}
+
 /* ============================ DỰ ÁN ============================ */
 
 /* ============================ MÀN ⑥ — BIBLE & THAM CHIẾU ============================ */
@@ -433,6 +473,7 @@ export interface Project {
     kichBan?: Section<KichBanData>;
     raSoat?: Section<RaSoatData>;
     bible?: Section<BibleData>;
+    phanCanh?: Section<PhanCanhData>;
   };
 }
 

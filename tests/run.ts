@@ -14,12 +14,16 @@ import { raSoat, normLoai, normMuc } from '../server/tasks/defs/raSoat';
 import { beatGiayOf, thangChamOf } from '../server/tasks/genre';
 import { checkDanY, checkCanh, canhCtx, checkKichBan, checkRaSoat, raSoatBlocking, tongDiem } from '../shared/checks';
 import {
-  emptyKichBan, ghiCanh, suaCanh, tinhTrangCanh, dauVaoCanh, dauBeat, daoCuTruoc, ganMaBeat, parseTrangThai, trangThaiText, beatId, normCanhId, normBeatId,
+  emptyKichBan, ghiCanh, suaCanh, tinhTrangCanh, dauVaoCanh, beatsOf, dauBeat, daoCuTruoc, ganMaBeat, parseTrangThai, trangThaiText, beatId, normCanhId, normBeatId,
 } from '../shared/kichBan';
 import type { DanY, Beat, KichBanData, RaSoatData, BibleData } from '../shared/project';
 import { bocTach, emptyBible, mucAnh, promptDaoCu, promptBoiCanh, promptSheet, PROP_SUFFIX, dongBoAnhSang } from '../shared/bible';
 import { checkBible, coTiengViet } from '../shared/checks';
 import { bibleStyle, bibleNhanVat, bibleDaoCu, bibleBoiCanh } from '../server/tasks/defs/bible';
+import { phanCanh } from '../server/tasks/defs/phanCanh';
+import { mocGiay, cauMay, dauVaoPhanCanh, tinhTrangPhanCanh, ganMaShot, blankShot, emptyPhanCanh } from '../shared/phanCanh';
+import { checkPhanCanhCanh, checkPhanCanh } from '../shared/checks';
+import type { PhanCanhData, Shot } from '../shared/project';
 import { checkTreatment, checkCharacters, normName, sentenceCount as sc2 } from '../shared/checks';
 import { normVai } from '../server/tasks/defs/nhanVat';
 import {
@@ -175,6 +179,7 @@ await test('mọi file prompt chỉ dùng biến mà tác vụ cung cấp', () =
     'bible-nhan-vat': bibleInput(),
     'bible-dao-cu': bibleInput(),
     'bible-boi-canh': bibleInput(),
+    'phan-canh': { brief, nhanVat: chars, kichBan: { danY: kbBible().danY, canh: kbBible().canh }, canhId: 'S2' },
   };
   for (const [id, def] of Object.entries(TASK_DEFS)) {
     const input = def.parseInput(samples[id]);
@@ -926,6 +931,83 @@ await test('tag bộ đồ trùng tag nhân vật chỉ có giọng thì lỗi',
   b.nhanVat = b.nhanVat.map((n) => (n.tag === 'lan' ? { ...n, bo: [n.bo[0], { ...n.bo[0], tag: 'me', ten: 'đồ ngủ', canh: [] }] } : n));
   const e = checkBible(b, { nhanVat: chars, canhIds: ids4 }).errors;
   assert.ok(e.some((x) => x.includes('@me bị trùng')), e.join('\n'));
+});
+
+/* ---------------- Màn ⑦ — Phân cảnh ---------------- */
+
+/** Phân cảnh hợp lệ cho cả kbBible(): mỗi beat 1 shot dài cả beat, thoại cả beat. */
+function goodPhanCanh(kb = kbBible()): PhanCanhData {
+  const pc = emptyPhanCanh();
+  kb.danY.canh.forEach((c) => {
+    const beats: PhanCanhData['canh'][string]['beats'] = {};
+    beatsOf(kb, c.id).forEach((b) => (beats[b.id] = ganMaShot(b.id, [{ ...blankShot(b.giay, b.coMat), moTa: 'Lan ngồi xuống.', thoai: b.thoai.map((_, n) => n) }], 1)));
+    pc.canh[c.id] = { beats, dauVao: dauVaoPhanCanh(kb, c.id), updatedAt: 1 };
+  });
+  return pc;
+}
+
+await test('phân cảnh: mốc giây bước 0,5; câu máy tiếng Anh do code ghép; mã shot không đánh lại số', () => {
+  const sh = (giay: number): Shot => ({ ...blankShot(giay), id: '' });
+  assert.deepEqual(mocGiay([sh(1.5), sh(2), sh(3.5)]), ['[00:00–00:01.5]', '[00:01.5–00:03.5]', '[00:03.5–00:07]']);
+  assert.equal(cauMay({ coCanh: 'can', gocMay: 'ngang', chuyenDong: 'day-vao' }), 'Close-up, eye level, slow dolly in');
+  const g = ganMaShot('B007', [sh(2), sh(2)], 1);
+  assert.deepEqual(g.shots.map((x) => x.id), ['B007.1', 'B007.2']);
+  // Xoá shot 2 rồi thêm shot mới: số mới là 3, không dùng lại 2
+  const g2 = ganMaShot('B007', [g.shots[0], sh(2)], g.soShot);
+  assert.deepEqual(g2.shots.map((x) => x.id), ['B007.1', 'B007.3']);
+});
+
+await test('phân cảnh hợp lệ thì không lỗi; thiếu shot, sai tổng giây, sai bước 0,5, thoại không thuộc shot nào', () => {
+  const kb = kbBible();
+  assert.deepEqual(checkPhanCanh(goodPhanCanh(kb), kb).errors, []);
+  const pc = goodPhanCanh(kb);
+  const b = beatsOf(kb, 'S2')[0];
+  pc.canh.S2.beats[b.id] = { shots: [{ ...blankShot(1.2, ['lan']), id: `${b.id}.1`, moTa: 'x' }, { ...blankShot(2, ['lan', 'conmeo']), id: `${b.id}.2`, moTa: '' }], soShot: 3 };
+  delete pc.canh.S1.beats[beatsOf(kb, 'S1')[0].id];
+  const e = checkPhanCanh(pc, kb).errors;
+  for (const want of ['Chưa có shot nào', 'Tổng giây các shot', 'bước 0,5', 'chưa có mô tả', '@conmeo không có mặt', 'chưa thuộc shot nào']) {
+    assert.ok(e.some((x) => x.includes(want)), `thiếu lỗi: ${want}\n${e.join('\n')}`);
+  }
+});
+
+await test('phân cảnh: cảnh báo shot rất ngắn, thoại dài so với shot, mô tả nhắc ánh sáng / địa điểm, người nói ngoài khung', () => {
+  const kb = kbBible();
+  const b = { ...beatsOf(kb, 'S1')[0], thoai: [{ ai: 'lan', cachNoi: 'khẽ', cau: 'Hôm nay mệt quá trời luôn đó mẹ ơi con muốn ngủ ngay bây giờ thôi' }] };
+  const shots: Shot[] = [
+    { ...blankShot(1, []), id: 'x.1', moTa: 'Ánh sáng đèn bàn hắt lên mặt Lan trong phòng trọ của Lan.', thoai: [0] },
+    { ...blankShot(b.giay - 1, ['lan']), id: 'x.2', moTa: 'Lan nằm xuống.' },
+  ];
+  const r = checkPhanCanhCanh([b], { beats: { [b.id]: { shots, soShot: 3 } }, dauVao: '', updatedAt: 0 }, { diaDiem: ['Phòng trọ của Lan', 'phongtro'] });
+  assert.deepEqual(r.errors, []);
+  for (const want of ['rất ngắn', 'thoại', 'nhắc ánh sáng', 'tên địa điểm', 'không ở trong khung']) {
+    assert.ok(r.warnings.some((x) => x.includes(want)), `thiếu cảnh báo: ${want}\n${r.warnings.join('\n')}`);
+  }
+});
+
+await test('phân cảnh: beat của cảnh đổi ở màn 4 thì chỉ cảnh đó "cần xem lại"', () => {
+  let kb = kbBible();
+  const pc = goodPhanCanh(kb);
+  kb = suaCanh(kb, 'S3', kb.canh.S3.beats.map((b, i) => (i === 0 ? { ...b, hanhDong: 'Khác.' } : b)), 9);
+  assert.deepEqual(kb.danY.canh.map((c) => tinhTrangPhanCanh(pc, kb, c.id)), ['da-lam', 'da-lam', 'can-xem-lai', 'da-lam']);
+  assert.ok(checkPhanCanh(pc, kb).errors.some((x) => x.includes('Cảnh 3 cần xem lại')));
+});
+
+await test('tác vụ phân cảnh: AI giả → mã shot, giây làm tròn 0,5, thoại số 1 → vị trí 0; sai tổng giây thì gửi lại', async () => {
+  const kb = kbBible();
+  const beats = beatsOf(kb, 'S2');
+  const shotsOf = (g: number, extra = 0, coMat: string[] = ['lan']) => [
+    { giay: 2, coCanh: 'toan', gocMay: 'Ngang tầm mắt', chuyenDong: 'tinh', moTa: 'Lan nhìn thùng xốp.', trongKhung: ['@lan'], thoai: [] as number[] },
+    { giay: g - 2 + extra, coCanh: 'can', gocMay: 'ngang', chuyenDong: 'day-vao', moTa: 'Tay Lan mở nắp.', trongKhung: coMat, thoai: [] as number[] },
+  ];
+  const raw = (extra: number) => ({ beats: beats.map((b, i) => ({ ma: b.id.toLowerCase(), shots: shotsOf(b.giay, i === 0 ? extra : 0, b.coMat).map((s, k) => (k === 1 && b.thoai.length ? { ...s, thoai: [1] } : s)) })) });
+  const deps = fakeDeps([raw(1), raw(0)]);
+  const r = await runTask(phanCanh, { brief, nhanVat: chars, kichBan: { danY: kb.danY, canh: kb.canh }, canhId: 'S2' }, 'p1', deps);
+  assert.deepEqual(r.errors, []);
+  const b0 = r.output[beats[0].id];
+  assert.deepEqual(b0.shots.map((x) => x.id), [`${beats[0].id}.1`, `${beats[0].id}.2`]);
+  assert.equal(b0.shots[0].gocMay, 'ngang', 'đọc được tên tiếng Việt');
+  assert.deepEqual(b0.shots[1].thoai, [0]);
+  assert.ok(deps.prompts[1].includes('Tổng giây các shot'));
 });
 
 /* ---------------- Kết quả ---------------- */

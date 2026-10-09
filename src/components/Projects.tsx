@@ -10,6 +10,7 @@ import TreatmentScreen from './screens/TreatmentScreen';
 import KichBanScreen from './screens/KichBanScreen';
 import RaSoatScreen from './screens/RaSoatScreen';
 import BibleScreen from './screens/BibleScreen';
+import PhanCanhScreen from './screens/PhanCanhScreen';
 import PlaceholderStep from './steps/PlaceholderStep';
 
 interface Props {
@@ -25,7 +26,6 @@ const STAGE_NAMES: Record<number, string> = { 1: 'Phát triển', 2: 'Tiền k�
 
 /** Màn đã làm ở lượt nào (màn chưa làm hiện trang giữ chỗ). */
 const PLANNED: Partial<Record<SectionKey, { title: string; items: string[] }>> = {
-  phanCanh: { title: 'Phân cảnh', items: ['Mỗi beat chia thành shot: cỡ cảnh, góc máy, chuyển động, số giây', 'Ô Mô tả tiếng Việt cho từng shot', 'Khung bàn giao để chụp frame nối'] },
   prompt: { title: 'Prompt', items: ['Prompt video cho từng beat theo khung 6 phần', 'Code chép phần cố định từ bible, AI chỉ dịch hành động', 'Frame nối và code tự kiểm trước khi xuất'] },
 };
 
@@ -117,6 +117,7 @@ function Workspace({ project, onUpdate, onDelete, onBack }: { project: Project; 
       {current.key === 'kichBan' && <KichBanScreen project={project} onUpdate={onUpdate} onGo={goTo} />}
       {current.key === 'raSoat' && <RaSoatScreen project={project} onUpdate={onUpdate} onGo={goTo} />}
       {current.key === 'bible' && <BibleScreen project={project} onUpdate={onUpdate} onGo={goTo} />}
+      {current.key === 'phanCanh' && <PhanCanhScreen project={project} onUpdate={onUpdate} onGo={goTo} />}
       {PLANNED[current.key] && <PlaceholderStep title={`${current.no}. ${PLANNED[current.key]!.title}`} items={PLANNED[current.key]!.items} />}
 
       <div className="pt-6 border-t border-gray-100">

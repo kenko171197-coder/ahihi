@@ -68,7 +68,7 @@ Danh sách: **cỡ cảnh** toàn cảnh, toàn trung, trung cảnh, cận trung
 
 ### Tác vụ `phan-canh` (một lần mỗi cảnh; "Phân cảnh tất cả" chạy lần lượt, dừng ở cảnh còn lỗi)
 
-Đọc: brief (khung dọc / ngang), mục *Cách quay* của thể loại, dòng dàn ý của cảnh, các beat (trạng thái đầu / cuối, thoại đánh số), mục *Cách quay* của thể loại.
+Đọc: brief (khung dọc / ngang), mục *Cách quay* của thể loại, dòng dàn ý của cảnh, các beat (trạng thái đầu / cuối, thoại đánh số).
 
 **Code kiểm — lỗi:** mọi beat có ít nhất một shot; tổng giây các shot = giây của beat; mỗi shot ≥ 1 giây, bước 0,5; có mô tả; cỡ / góc / chuyển động thuộc danh sách; trong khung ⊂ có mặt của beat; mỗi câu thoại thuộc đúng một shot.
 **Cảnh báo:** shot dưới 1,5 giây; thoại quá dài so với giây của shot (khoảng 3 chữ / giây); mô tả nhắc ánh sáng hoặc tên địa điểm; người nói (có tag) không ở trong khung shot đó, trừ khi nói qua điện thoại / giọng.
