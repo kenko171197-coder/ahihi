@@ -7,7 +7,7 @@ Người dùng là nhà làm phim, không phải lập trình viên: **trả l�
 
 @docs/QUYET-DINH.md
 
-- Bản thiết kế lượt 2 (đã làm): `docs/LUOT-2.md`. Lượt 3: `docs/LUOT-3.md` (màn ⑥ và ⑦ đã duyệt).
+- Bản thiết kế lượt 2 (đã làm): `docs/LUOT-2.md`. Lượt 3: `docs/LUOT-3.md` (màn ⑥ và ⑦). Lượt 4: `docs/LUOT-4.md` (màn ⑧ Prompt, frame nối, xuất file).
 - Mọi thay đổi phải khớp `docs/QUYET-DINH.md`. Muốn làm khác quyết định đã chốt → hỏi người dùng trước, sửa file đó trước rồi mới code.
 
 ## Cách làm việc (bắt buộc)
@@ -27,6 +27,8 @@ Người dùng là nhà làm phim, không phải lập trình viên: **trả l�
 | `shared/kichBan.ts` | Kịch bản: mã cảnh / beat cố định (`ganMaBeat`), trạng thái theo dòng (`parseTrangThai`), trạng thái đầu beat (`dauBeat`), cờ "cần xem lại" theo cảnh (`dauVaoCanh`, `tinhTrangCanh`), đạo cụ đã khai (`daoCuTruoc`), ghi cảnh (`ghiCanh` = kết quả AI / "vẫn đúng", `suaCanh` = sửa tay) |
 | `shared/bible.ts` | Bible (màn ⑥): bóc tách từ kịch bản chốt (`bocTach`, giữ phần đã làm khi bóc lại), ghép prompt ảnh (`promptNhanVat / promptSheet / promptDaoCu / promptBoiCanh`), danh sách ảnh tham chiếu (`mucAnh`), ánh sáng cùng khoá dùng chung câu (`dongBoAnhSang`) |
 | `shared/phanCanh.ts` | Phân cảnh (màn ⑦): danh sách cỡ cảnh / góc máy / chuyển động kèm câu tiếng Anh (`cauMay`), mốc giây (`mocGiay`, bước 0,5), mã shot cố định (`ganMaShot`), cờ "cần xem lại" theo cảnh (`dauVaoPhanCanh`, `tinhTrangPhanCanh`) |
+| `shared/prompt.ts` | Prompt video (màn ⑧): ghép 6 phần (`ghepBeat`, `ghepCanh`), ảnh cần nạp (`anhCanNap`, tag nhân vật → tag bộ đồ của cảnh), frame nối (`@noitiep`, chỉ trong cùng cảnh), cờ "cần dịch lại" theo cảnh (`dauVaoPrompt`), khớp phần dịch (`khopDich`), code kiểm phần AI dịch (`checkPromptDich` — đặt ở đây, không ở checks.ts, để tránh import vòng) |
+| `shared/xuat.ts` | Xuất .txt: prompt mọi beat (`xuatPromptTxt`), kịch bản dạng đọc (`xuatKichBanTxt`) |
 | `server/anhThamChieu.ts` | Quét ảnh tham chiếu gán @tag (gọi AI kèm ảnh, route `/api/match-images`) |
 | `shared/checks.ts` | Code kiểm dùng chung cho server (kiểm kết quả AI) và giao diện (kiểm bản sửa tay) |
 | `server/tasks/framework.ts` | Khung chung mọi tác vụ AI: khuôn prompt → gọi AI với khuôn trả về → `normalize` → `check` → sai thì gửi lại kèm lỗi (tối đa 2 lần) → nhật ký |
@@ -63,4 +65,5 @@ Người dùng là nhà làm phim, không phải lập trình viên: **trả l�
 - **Lượt 2 — xong:** màn ④ Kịch bản (dàn ý cảnh `dan-y-canh` + viết beat từng cảnh `viet-canh`) và ⑤ Rà soát (`ra-soat`, sửa đề xuất bằng `viet-canh` chế độ sửa, ghi thẳng vào ④). Màn ⑥ ⑦ dựa trên ⑤. Thiết kế: `docs/LUOT-2.md`.
 - **Lượt 3a — xong:** màn ⑥ Bible & tham chiếu mới (bóc tách, style cố định, `bible-style`, `bible-nhan-vat` gồm giọng + bộ đồ, `bible-dao-cu`, `bible-boi-canh` gồm ánh sáng từng cảnh, ảnh tham chiếu). Màn ⑥ tạm cũ đã gỡ. Thiết kế: `docs/LUOT-3.md`.
 - **Lượt 3b — xong:** màn ⑦ Phân cảnh (`phan-canh`, một lần mỗi cảnh; shot có số giây bước 0,5, máy chọn từ danh sách, ô Mô tả tiếng Việt, thoại theo shot).
-- **Lượt 4 — tiếp theo:** ⑧ Prompt + frame nối + xuất file (trình bày thiết kế trước).
+- **Lượt 4 — xong:** màn ⑧ Prompt (`prompt-canh`, một lần mỗi cảnh; code ghép phần cố định, AI chỉ dịch), frame nối, đánh dấu đã tạo video (báo khi prompt đổi sau đó), xuất prompt và kịch bản .txt. Làm ngoài Claude Code: **chưa chạy `npm run lint` và `npm run dev` thật** — việc đầu tiên ở phiên sau là chạy hai lệnh này và sửa lỗi nếu có.
+- Tiếp theo: dùng thật và tinh chỉnh (file thể loại, câu chữ prompt).

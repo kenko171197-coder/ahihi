@@ -36,7 +36,7 @@ export function parsePromptBeat(v: unknown): PromptBeat {
     shots,
     ambient: str(o.ambient, 600),
     music: str(o.music, 600),
-    thoai: arr(o.thoai).map((x) => ({ cachNoi: str(obj(x).cachNoi, 200), nguoiNoi: str(obj(x).nguoiNoi, 200) })),
+    thoai: arr(o.thoai).map((x) => ({ cachNoi: str(obj(x).cachNoi, 200), nguoiNoi: str(obj(x).nguoiNoi, 200), goc: str(obj(x).goc, 2000) || undefined })),
     giuDung: arr(o.giuDung).map((x) => str(x, 400)).filter(Boolean).slice(0, GIU_DUNG_MAX),
   };
 }

@@ -4,7 +4,7 @@ import { RefreshCw, Languages, Check, PenLine, ImagePlus, Trash2, Film, Link2 } 
 import type { CanhDanY, Character, PromptBeat } from '../../../types';
 import { fmtGiay } from '../../../../shared/project';
 import { mocGiay } from '../../../../shared/phanCanh';
-import { khopDich, NguonBeat, PromptKetQua, TinhTrangPrompt, AnhNap, FRAME_TAG } from '../../../../shared/prompt';
+import { khopDich, dauPrompt, NguonBeat, PromptKetQua, TinhTrangPrompt, AnhNap, FRAME_TAG } from '../../../../shared/prompt';
 import { useImage } from '../../../lib/useImage';
 import { CopyButton, RunButton } from '../../ui';
 import { Issues, ReviseBox, Field } from '../common';
@@ -126,8 +126,13 @@ function DichEditor({ n, d, chars, coNhac, onChange }: { n: NguonBeat; d: Prompt
   );
 }
 
-function BeatPrompt({ r, n, d, chars, coNhac, laBeatCuoi, frameId, daTao, busy, onDich, onFrame, onDaTao, onError }: {
-  r: PromptKetQua; n: NguonBeat; d?: PromptBeat; chars: Character[]; coNhac: boolean; laBeatCuoi: boolean; frameId?: string; daTao: boolean; busy: boolean;
+function BeatPrompt({ r, n, d, chars, coNhac, laBeatCuoi, frameId, daTao, doiSauTao, frameLech, busy, onDich, onFrame, onDaTao, onError }: {
+  r: PromptKetQua; n: NguonBeat; d?: PromptBeat; chars: Character[]; coNhac: boolean; laBeatCuoi: boolean; frameId?: string; daTao: boolean;
+  /** Prompt đã đổi sau khi đánh dấu đã tạo video */
+  doiSauTao: boolean;
+  /** Prompt beat trước đã đổi sau khi dán frame nối */
+  frameLech: boolean;
+  busy: boolean;
   onDich: (d: PromptBeat) => void; onFrame: (f: File | null) => void; onDaTao: (v: boolean) => void; onError: (m: string) => void;
 }) {
   const base = d || khopDich([n])[n.beat.id];
@@ -155,6 +160,16 @@ function BeatPrompt({ r, n, d, chars, coNhac, laBeatCuoi, frameId, daTao, busy, 
         </ul>
       </div>
 
+      {doiSauTao && (
+        <p className="text-sm rounded-xl bg-amber-50 border border-amber-200 text-amber-900 p-2.5">
+          Prompt của beat này đã đổi sau khi bạn đánh dấu "đã tạo video" (sửa ở màn 6 / 7 hoặc phần dịch). Video đã tạo có thể không còn khớp — tạo lại nếu cần, rồi bỏ dấu và đánh dấu lại.
+        </p>
+      )}
+      {frameLech && (
+        <p className="text-sm rounded-xl bg-amber-50 border border-amber-200 text-amber-900 p-2.5">
+          Prompt của {r.beatTruoc} đã đổi sau khi bạn dán frame cuối của nó. Nếu đã tạo lại video {r.beatTruoc}, dán lại frame mới.
+        </p>
+      )}
       {r.chuaCoFrame && (
         <p className="text-sm rounded-xl bg-amber-50 border border-amber-200 text-amber-900 p-2.5">
           Chưa có frame nối từ {r.beatTruoc} — prompt vẫn dùng được nhưng độ khớp với beat trước thấp hơn. Dán frame cuối ở thẻ {r.beatTruoc}.
@@ -194,7 +209,8 @@ interface Props {
   dich?: Record<string, PromptBeat>;
   tinhTrang: TinhTrangPrompt;
   frames: Record<string, string>;
-  daTao: Record<string, boolean>;
+  frameTheo: Record<string, string>;
+  daTao: Record<string, string>;
   chars: Character[];
   coNhac: boolean;
   running: '' | 'lam' | 'sua';
@@ -212,7 +228,7 @@ interface Props {
   onError: (m: string) => void;
 }
 
-export default function CanhPrompt({ no, canh, nguon, ketQua, dich, tinhTrang, frames, daTao, chars, coNhac, running, disabled, locked, onRun, onRevise, onKeep, onManual, onDich, onFrame, onDaTao, onError }: Props) {
+export default function CanhPrompt({ no, canh, nguon, ketQua, dich, tinhTrang, frames, frameTheo, daTao, chars, coNhac, running, disabled, locked, onRun, onRevise, onKeep, onManual, onDich, onFrame, onDaTao, onError }: Props) {
   const conLoi = ketQua.some((r) => r.errors.length > 0);
   const tt = tinhTrang === 'da-dich' && conLoi ? { label: 'Còn lỗi', cls: 'bg-red-100 text-red-800' } : TINH_TRANG[tinhTrang];
   const daDich = tinhTrang !== 'chua-dich';
@@ -259,6 +275,9 @@ export default function CanhPrompt({ no, canh, nguon, ketQua, dich, tinhTrang, f
         {nguon.map((n, i) => {
           const r = ketQua.find((x) => x.beatId === n.beat.id);
           if (!r) return null;
+          const truoc = i > 0 ? ketQua.find((x) => x.beatId === nguon[i - 1].beat.id) : undefined;
+          const dauTao = daTao[n.beat.id];
+          const dauFrame = truoc ? frameTheo[truoc.beatId] : '';
           return (
             <BeatPrompt
               key={n.beat.id}
@@ -269,7 +288,9 @@ export default function CanhPrompt({ no, canh, nguon, ketQua, dich, tinhTrang, f
               coNhac={coNhac}
               laBeatCuoi={i === nguon.length - 1}
               frameId={frames[n.beat.id]}
-              daTao={!!daTao[n.beat.id]}
+              daTao={!!dauTao}
+              doiSauTao={!!dauTao && dauTao !== 'x' && dauTao !== dauPrompt(r.text)}
+              frameLech={!!truoc && !!frames[truoc.beatId] && !!dauFrame && dauFrame !== dauPrompt(truoc.text)}
               busy={!!running}
               onDich={(d) => onDich(n.beat.id, d)}
               onFrame={(f) => onFrame(n.beat.id, f)}

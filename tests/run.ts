@@ -1235,6 +1235,46 @@ await test('xuất file: prompt có danh sách ảnh và beat chưa dịch; kị
   assert.ok(k.includes('CẢNH 1 · PHÒNG TRỌ CỦA LAN — KHUYA') && k.includes('MẸ (qua điện thoại): Nhận được chưa con?'), k.slice(0, 600));
 });
 
+
+await test('soát lượt 4: tag trong âm thanh / người nói đổi theo bộ đồ; câu bối cảnh bị cảnh báo; beat không shot không ra prompt', () => {
+  const ctx = goodGhep();
+  ctx.bible = { ...ctx.bible, nhanVat: ctx.bible.nhanVat.map((n) => (n.tag === 'lan' ? { ...n, bo: [{ ...n.bo[0], tag: 'lanao', canh: ['S1', 'S2', 'S3', 'S4'] }] } : n)) };
+  const b = beatsOf(ctx.kb, 'S1')[0];
+  const d = ctx.prompt.canh.S1.beats[b.id];
+  const sid = Object.keys(d.shots)[0];
+  ctx.prompt.canh.S1.beats[b.id] = { ...d, ambient: "@lan's slippers shuffling", shots: { ...d.shots, [sid]: '@lan walks in the small rented room.' } };
+  const r = ghepBeat(ctx, 'S1', b.id);
+  assert.deepEqual(r.errors, []);
+  assert.ok(r.text.includes("Ambient: @lanao's slippers shuffling."), r.text);
+  assert.ok(r.warnings.some((w) => w.includes('tả lại bối cảnh')), r.warnings.join('|'));
+  assert.ok(!ghepBeat(ctx, 'S1', beatsOf(ctx.kb, 'S2')[0].id).warnings.some((w) => w.includes('ánh sáng')), 'hành động thường không bị báo ánh sáng');
+  ctx.pc.canh.S1.beats[b.id] = { shots: [], soShot: 3 };
+  assert.equal(ghepBeat(ctx, 'S1', b.id).text, '', 'beat không có shot thì không có prompt để chép');
+});
+
+await test('soát lượt 4: xoá một câu thoại ở màn 4 → phần dịch đi theo đúng câu, không lệch vị trí', () => {
+  const kb = kbBible();
+  const b = beatsOf(kb, 'S2')[0];
+  const hai = [{ ai: 'me', cachNoi: 'giận', cau: 'Sao không nghe máy?' }, { ai: 'me', cachNoi: 'dịu', cau: 'Ăn đi con.' }];
+  const kb2 = suaCanh(kb, 'S2', beatsOf(kb, 'S2').map((x) => (x.id === b.id ? { ...x, thoai: hai } : x)), 3);
+  const pc = pcHaiShot(kb2);
+  const dich = khopDich(nguonCanh(kb2, pc.canh.S2, 'S2'));
+  dich[b.id].thoai = dich[b.id].thoai.map((t, k) => ({ ...t, cachNoi: k === 0 ? 'angrily' : 'gently' }));
+  const kb3 = suaCanh(kb2, 'S2', beatsOf(kb2, 'S2').map((x) => (x.id === b.id ? { ...x, thoai: [hai[1]] } : x)), 4);
+  const k = khopDich(nguonCanh(kb3, pcHaiShot(kb3).canh.S2, 'S2'), dich);
+  assert.equal(k[b.id].thoai.length, 1);
+  assert.equal(k[b.id].thoai[0].cachNoi, 'gently');
+});
+
+await test('soát lượt 4: file prompt ghi rõ cảnh cần dịch lại và màn trên chưa chốt', () => {
+  const ctx = goodGhep();
+  ctx.prompt.canh.S3.dauVao = 'cu';
+  const t = xuatPromptTxt({ ...ctx, title: 'x', tiLe: '9:16', chuaChot: 'màn 7 đang nháp' });
+  assert.ok(t.includes('LƯU Ý: màn 7 đang nháp'));
+  const s3 = t.slice(t.indexOf('CẢNH 3'), t.indexOf('CẢNH 4'));
+  assert.ok(s3.includes('CẦN DỊCH LẠI') && !t.slice(0, t.indexOf('CẢNH 3')).includes('CẦN DỊCH LẠI'));
+});
+
 /* ---------------- Kết quả ---------------- */
 
 console.log(`\n${passed} test đạt, ${failures.length} test lỗi.`);

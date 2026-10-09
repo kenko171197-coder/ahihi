@@ -45,7 +45,7 @@ Cách gọi người và vật:
 
 Thoại (câu thoại giữ nguyên {{ngon_ngu}}, app tự chép — bạn KHÔNG dịch câu thoại):
 8. "thoai": mỗi câu thoại của beat một mục, "so" là số thứ tự câu (1, 2, …).
-9. "cachNoi": cách nói bằng tiếng Anh, 1–4 từ (ví dụ "softly", "with a tired sigh", "over the phone"). Không ghi cách nói thì để trống.
+9. "cachNoi": cách nói bằng tiếng Anh, 1–3 từ (ví dụ "softly", "with a tired sigh", "over the phone"). Không ghi cách nói thì để trống.
 10. "nguoiNoi": người nói, tiếng Anh. Người có trong khung thì ghi @tag; người không có ảnh trong beat (nói qua điện thoại, người qua đường) thì mô tả ngắn không có @, ví dụ "Lan's mother over the phone".
 
 Giữ đúng:

@@ -20,12 +20,20 @@ export const nhieuShot = (n: number) => `Exactly ${n} shots, joined by hard cuts
 
 /** Khoảng số từ hợp lý của một prompt (ngoài khoảng chỉ cảnh báo). Mục tiêu 150–220 từ cho beat 2 shot. */
 export const TU_MIN = 120;
-export const TU_MAX = 260;
+export const TU_MAX = 320;
 export const GIU_DUNG_MAX = 3;
 export const GIU_DUNG_TU = 12;
 export const HANH_DONG_TU = 45;
 
-export const emptyPrompt = (): PromptData => ({ canh: {}, frame: {}, daTao: {} });
+export const emptyPrompt = (): PromptData => ({ canh: {}, frame: {}, frameTheo: {}, daTao: {} });
+
+/** Dữ liệu lưu từ bản trước có thể thiếu trường mới. */
+export const docPrompt = (p?: Partial<PromptData>): PromptData => ({ ...emptyPrompt(), ...(p || {}) });
+
+/** Dấu của một prompt đã ghép (để biết prompt có đổi sau khi tạo video / dán frame không). */
+export const dauPrompt = (text: string) => (text ? hash(text) : '');
+
+export const gocThoai = (t: { ai: string; cau: string }) => `${t.ai}|${t.cau}`;
 
 /* ---------- Tiện ích chữ ---------- */
 
@@ -127,7 +135,12 @@ export function khopDich(nguon: NguonBeat[], old: Record<string, PromptBeat> = {
       shots,
       ambient: o.ambient,
       music: o.music,
-      thoai: n.beat.thoai.map((_, k) => o.thoai[k] || { cachNoi: '', nguoiNoi: '' }),
+      // Thoại: khớp theo câu gốc; bản dịch cũ chưa ghi câu gốc thì khớp theo vị trí
+      thoai: n.beat.thoai.map((t, k) => {
+        const g = gocThoai(t);
+        const cu = o.thoai.find((x) => x.goc === g) || (o.thoai[k] && !o.thoai[k].goc ? o.thoai[k] : undefined);
+        return { cachNoi: cu?.cachNoi || '', nguoiNoi: cu?.nguoiNoi || '', goc: g };
+      }),
       giuDung: o.giuDung.slice(0, GIU_DUNG_MAX),
     };
   });
@@ -220,8 +233,10 @@ export interface PromptKetQua {
   warnings: string[];
 }
 
-const ANH_SANG_EN = /\b(lighting|light|lights|lamp|lamplight|sunlight|moonlight|neon|glow|glowing|lit|shadows?)\b/i;
-const NGOAI_HINH_EN = /\b(wearing|dressed in|hair|shirt|blouse|dress|jacket|cardigan|trousers|jeans)\b/i;
+// Cảnh báo câu hành động tả lại ánh sáng / ngoại hình / bối cảnh (đã có ở ② và ảnh tham chiếu). Hẹp để ít báo nhầm hành động thật.
+const ANH_SANG_EN = /\b(lighting|sunlight|moonlight|lamplight|neon|glow(?:ing|s)?|(?:dim|soft|warm|cold|harsh|bright|golden|pale) (?:light|glow)|lit by|bathed in)\b/i;
+const NGOAI_HINH_EN = /\b(wearing|dressed in|clad in)\b/i;
+const BOI_CANH_EN = /\b(?:in|inside|at|across|of) (?:the|a|an|her|his|their|this) (?:[a-z-]+ ){0,3}(room|kitchen|bedroom|bathroom|apartment|flat|house|office|cafe|restaurant|market|street|alley|park|corridor|hallway|balcony|shop|store|classroom|hospital)\b/i;
 
 export function ghepBeat(ctx: GhepCtx, canhId: string, beatId: string): PromptKetQua {
   const canh = ctx.kb.danY.canh.find((c) => c.id === canhId);
@@ -252,11 +267,13 @@ export function ghepBeat(ctx: GhepCtx, canhId: string, beatId: string): PromptKe
   if (!anh.some((a) => a.loai === 'location')) warnings.push('Cảnh chưa có ảnh bối cảnh trong bible (màn 6).');
 
   const chuaCoFrame = i > 0 && !frameId;
+  const bt = anh.find((a) => a.loai === 'location')?.tag || '';
   const ket = (text: string): PromptKetQua => ({ ...base, giay: b.giay, soShot: shots.length, text, anh, soTu: soTu(text), chuaDich: !dich, chuaCoFrame, errors, warnings });
   if (!dich) {
     errors.push('Beat chưa dịch.');
     return ket('');
   }
+  if (!shots.length) return ket('');
 
   /* ① Ảnh tham chiếu */
   const ds = anh.filter((a) => a.loai !== 'frame').map((a) => `@${a.tag}${a.vaiTro.trim() ? ` as ${boCham(a.vaiTro)}` : ''}`);
@@ -277,24 +294,26 @@ export function ghepBeat(ctx: GhepCtx, canhId: string, beatId: string): PromptKe
     if (!cau.trim()) errors.push(`Shot ${k + 1} chưa có câu hành động.`);
     if (ANH_SANG_EN.test(cau)) warnings.push(`Shot ${k + 1}: câu hành động nhắc ánh sáng ("${ANH_SANG_EN.exec(cau)![0]}") — ánh sáng đã có ở phần không gian.`);
     if (NGOAI_HINH_EN.test(cau)) warnings.push(`Shot ${k + 1}: câu hành động tả ngoại hình / trang phục ("${NGOAI_HINH_EN.exec(cau)![0]}") — ảnh tham chiếu đã lo phần này.`);
+    if (BOI_CANH_EN.test(cau) || (bt && cau.toLowerCase().includes(`@${bt.toLowerCase()}`))) warnings.push(`Shot ${k + 1}: câu hành động tả lại bối cảnh ("${BOI_CANH_EN.exec(cau)?.[0] || `@${bt}`}") — bối cảnh đã có ở phần không gian.`);
     tagsTrong(cau)
       .filter((t) => khung.includes(t) && !s.trongKhung.includes(t))
       .forEach((t) => warnings.push(`Shot ${k + 1}: nhắc @${t} nhưng @${t} không ở trong khung shot này.`));
-    return `${moc[k]} ${cap(cauMay(s))}. ${cham(doiTag(cau, map))}`.trim();
+    const may = cap(cauMay(s));
+    return `${moc[k]} ${may ? `${may}. ` : ''}${cham(doiTag(cau, map))}`.trim();
   });
   const p4 = hanhDong.join(' Hard cut to ');
 
   /* ⑤ Âm thanh */
   const am: string[] = [];
-  if (dich.ambient.trim()) am.push(`Ambient: ${cham(dich.ambient)}`);
-  am.push(ctx.brief.nhacNen === 'khong' || !dich.music.trim() ? 'Music: none.' : `Music: ${cham(dich.music)}`);
+  if (dich.ambient.trim()) am.push(`Ambient: ${cham(doiTag(dich.ambient, map))}`);
+  am.push(ctx.brief.nhacNen === 'khong' || !dich.music.trim() ? 'Music: none.' : `Music: ${cham(doiTag(dich.music, map))}`);
   const lang = ngonNguEn(ctx.brief.thoai.ngonNgu);
   b.thoai.forEach((t, k) => {
     const si = shots.findIndex((s) => s.thoai.includes(k));
     const d = dich.thoai[k] || { cachNoi: '', nguoiNoi: '' };
     const loaded = map.get(t.ai);
     const isChar = ctx.nhanVat.some((c) => c.tag === t.ai);
-    const nguoi = loaded ? `@${loaded}` : boCham(d.nguoiNoi);
+    const nguoi = loaded ? `@${loaded}` : boCham(doiTag(d.nguoiNoi, map));
     if (!nguoi) errors.push(`Câu thoại ${k + 1}: chưa có tên người nói (tiếng Anh).`);
     const giong = isChar ? boCham(ctx.bible.nhanVat.find((x) => x.tag === t.ai)?.giong || '') : '';
     const how = boCham(d.cachNoi);
@@ -367,6 +386,7 @@ export function checkPromptDich(nguon: NguonBeat[], dich: Record<string, PromptB
           if (soTu(c) > HANH_DONG_TU) w.push(`Shot ${k + 1}: câu hành động dài ${soTu(c)} từ — nên gọn dưới ${HANH_DONG_TU} từ.`);
           if (ANH_SANG_EN.test(c)) w.push(`Shot ${k + 1}: câu hành động nhắc ánh sáng.`);
           if (NGOAI_HINH_EN.test(c)) w.push(`Shot ${k + 1}: câu hành động tả ngoại hình / trang phục.`);
+          if (BOI_CANH_EN.test(c)) w.push(`Shot ${k + 1}: câu hành động tả lại bối cảnh ("${BOI_CANH_EN.exec(c)![0]}").`);
         }
       });
       en('Âm thanh môi trường', d.ambient);

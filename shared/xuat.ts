@@ -2,21 +2,23 @@
 import type { Brief, Character, KichBanData } from './project';
 import { fmtGiay } from './project';
 import { beatsOf, tongGiayBeat } from './kichBan';
-import { ghepCanh, GhepCtx, FRAME_TAG } from './prompt';
+import { ghepCanh, GhepCtx, FRAME_TAG, tinhTrangPrompt } from './prompt';
 
 const LINE = '='.repeat(60);
 
 const tieuDe = (no: number, diaDiem: string, thoiDiem: string) => `CẢNH ${no} · ${(diaDiem || 'chưa có địa điểm').toUpperCase()}${thoiDiem ? ` — ${thoiDiem.toUpperCase()}` : ''}`;
 
 /** File prompt: mỗi beat có danh sách ảnh cần nạp và prompt. Beat chưa dịch / còn lỗi được ghi rõ. */
-export function xuatPromptTxt(ctx: GhepCtx & { title: string; tiLe: string }): string {
+export function xuatPromptTxt(ctx: GhepCtx & { title: string; tiLe: string; chuaChot?: string }): string {
   const out: string[] = [];
   const all = ctx.kb.danY.canh.flatMap((c) => beatsOf(ctx.kb, c.id));
   out.push(`XƯỞNG PHIM AI — PROMPT VIDEO`, `Dự án: ${ctx.title}`, `Khung hình: ${ctx.tiLe} · ${all.length} beat · ${fmtGiay(tongGiayBeat(all))}`, '');
   out.push('Mỗi beat = một lần tạo video trên Omni Flash: nạp đúng các ảnh trong danh sách (đặt đúng tên @tag), dán prompt, tạo.');
   out.push(`Ảnh @${FRAME_TAG} là frame cuối của video beat trước (bạn chụp ở Flow, dán vào app).`, '');
+  if (ctx.chuaChot) out.push(`LƯU Ý: ${ctx.chuaChot}`, '');
   ctx.kb.danY.canh.forEach((c, i) => {
     out.push(LINE, `${tieuDe(i + 1, c.diaDiem, c.thoiDiem)} (${c.id})`, LINE, '');
+    if (tinhTrangPrompt(ctx.prompt, ctx.kb, ctx.pc, c.id, ctx.brief.nhacNen) === 'can-dich-lai') out.push('CẦN DỊCH LẠI: chữ tiếng Việt của cảnh đã đổi sau khi dịch — prompt dưới đây có thể chưa khớp kịch bản.', '');
     ghepCanh(ctx, c.id).forEach((r) => {
       out.push(`--- ${r.beatId} · ${r.giay}s · ${r.soShot} shot ---`);
       out.push(`Ảnh cần nạp: ${r.anh.map((a) => `@${a.tag}${a.loai === 'frame' ? ` (frame cuối ${r.beatTruoc})` : a.imageId ? '' : ' (CHƯA CÓ ẢNH)'}`).join(', ') || '(không có)'}`);

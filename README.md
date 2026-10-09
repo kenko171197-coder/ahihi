@@ -1,4 +1,4 @@
-# Xưởng phim AI — lượt 3
+# Xưởng phim AI — lượt 4 (đủ 8 màn)
 
 Đi từ ý tưởng tới prompt video cho Gemini Omni Flash, qua 3 giai đoạn, 8 màn. Mọi quyết định thiết kế: `docs/QUYET-DINH.md`.
 
@@ -37,7 +37,13 @@
 
 - **Màn ⑦ Phân cảnh:** mỗi beat chia thành shot — số giây (bước 0,5), cỡ cảnh, góc máy, chuyển động (chọn trong danh sách, app tự ghép câu máy tiếng Anh cho màn ⑧), ô **Mô tả** tiếng Việt (nguồn duy nhất cho câu hành động), ai / vật trong khung, câu thoại nào nói trong shot. AI làm từng cảnh ("Phân cảnh tất cả" chạy lần lượt); sửa tay, thêm / xoá / tách shot, mốc giây tự tính. Beat của cảnh đổi ở màn ④ ⑤ → cảnh đó "cần xem lại".
 
-Màn ⑧: lượt 4.
+## Đã làm ở lượt 4
+
+- **Màn ⑧ Prompt:** mỗi beat một prompt video tiếng Anh theo khung 6 phần (ảnh tham chiếu · không gian · lúc bắt đầu · các shot nối bằng "Hard cut to" · âm thanh · giữ đúng). App tự chép style, bối cảnh, ánh sáng, mốc giây, câu máy, giọng và câu thoại nguyên văn; AI chỉ dịch (tác vụ `prompt-canh`, một lần mỗi cảnh, "Dịch tất cả" chạy lần lượt). Nhân vật đổi bộ đồ → cảnh đó tự gọi đúng tag bộ đồ. Mô tả ngoại hình không chép vào prompt (ảnh tham chiếu lo).
+- Mỗi beat: ảnh cần nạp (ảnh nhỏ + @tag + vai trò, thiếu ảnh báo đỏ), nút **Chép prompt**, số từ, lỗi / cảnh báo, sửa tay phần dịch, ô **Đã tạo video**.
+- **Frame nối:** dán frame cuối video của beat → beat sau **cùng cảnh** tự nạp ảnh `@noitiep`. Chưa có frame vẫn dùng được, có ghi chú.
+- Chữ tiếng Việt nguồn đổi → cảnh "cần dịch lại". Sửa style / ánh sáng / máy / giây → prompt tự ghép lại, không cần gọi AI; beat đã đánh dấu "đã tạo video" (hoặc đã dán frame) mà prompt đổi sau đó thì app báo.
+- **Xuất file:** prompt (.txt, có danh sách ảnh cần nạp mỗi beat, ghi chú beat chưa sẵn sàng) và kịch bản (.txt). Frame nối nằm trong file sao lưu dự án.
 
 ## Cấu trúc
 
@@ -64,4 +70,4 @@ Lưu trong trình duyệt (localStorage, ảnh trong IndexedDB). Nút **Lưu ra 
 ## Lưu ý
 
 - **Nhật ký AI** chứa prompt và ý tưởng của bạn. App chỉ trả nhật ký cho trình duyệt có gửi kèm key, nhưng server vẫn mở cho cả mạng nội bộ (`0.0.0.0`, như bản cũ, để chạy được trong khung xem trước). Nếu chạy trên mạng dùng chung (quán cà phê, công ty), nên xoá thư mục `logs/` sau khi dùng.
-- Phần kiểm tra trong lượt này chỉ chạy được test logic và kiểm kiểu; giao diện cần bạn chạy thử trên máy.
+- Lượt 4 làm ngoài Claude Code (không cài được thư viện): đã chạy test logic, kiểm kiểu và bấm thử màn ⑧ trên trình duyệt với bản dựng tạm (biểu tượng giả). Chưa chạy `npm run lint` / `npm run dev` thật — cần chạy thử trên máy hoặc trong Claude Code.

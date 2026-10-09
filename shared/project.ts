@@ -370,6 +370,8 @@ export interface ThoaiDich {
   cachNoi: string;
   /** Người nói, tiếng Anh — dùng khi người nói không có ảnh nạp ở beat (nói qua điện thoại, người qua đường) */
   nguoiNoi: string;
+  /** Câu thoại gốc lúc dịch ("tag|câu") — để thêm / xoá câu ở màn 4 không làm phần dịch lệch sang câu khác */
+  goc?: string;
 }
 
 /** Phần AI dịch của một beat. Phần cố định (ảnh, không gian, máy, giọng, thoại) do code ghép lúc hiển thị. */
@@ -396,8 +398,11 @@ export interface PromptData {
   canh: Record<string, PromptCanh>;
   /** Frame cuối video của beat (id ảnh trong kho ảnh), dùng làm frame nối cho beat sau cùng cảnh */
   frame: Record<string, string>;
+  /** Dấu prompt của beat lúc dán frame — prompt đổi sau đó thì báo frame có thể không khớp */
+  frameTheo: Record<string, string>;
   /** Beat đã tạo video ở Flow */
-  daTao: Record<string, boolean>;
+  /** Dấu prompt lúc đánh dấu (rỗng / không có = chưa) — prompt đổi sau đó thì báo có thể cần tạo lại */
+  daTao: Record<string, string>;
 }
 
 /* ============================ DỰ ÁN ============================ */
