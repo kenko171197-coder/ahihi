@@ -1,13 +1,13 @@
 // Màn ⑦ — Phân cảnh: mỗi beat chia thành shot (một beat vẫn là một lần tạo video). AI làm từng cảnh; sửa tay từng shot.
 import React, { useEffect, useRef, useState } from 'react';
 import { Clapperboard, Square, ArrowRight } from 'lucide-react';
-import type { Project, ProjectPatch, SectionKey, Section, PhanCanhData, PhanCanhBeat, Shot } from '../../types';
+import type { Project, ProjectPatch, SectionKey, Section, PhanCanhData, PhanCanhBeat, PhanCanhCanh, Shot, KichBanData } from '../../types';
 import { freshSection, editSection, approveSection, keepSection, missingDeps, blockedDeps, depRevs } from '../../../shared/project';
 import { beatsOf } from '../../../shared/kichBan';
 import { emptyPhanCanh, dauVaoPhanCanh, tinhTrangPhanCanh, ganMaShot, blankShot } from '../../../shared/phanCanh';
 import { checkPhanCanh } from '../../../shared/checks';
 import { runTask, TaskResult } from '../../services/api';
-import { askConfirm } from '../../lib/dialog';
+import { askConfirm, notify } from '../../lib/dialog';
 import { ErrorBox, RunButton } from '../ui';
 import { ScreenIntro, StatusBar, Issues, useRunner, LockedScreen, UpstreamBanner } from './common';
 import CanhShots from './phanCanh/CanhShots';
@@ -19,6 +19,16 @@ interface Props {
 }
 
 const tick = () => new Promise((r) => setTimeout(r, 30));
+
+/** Bỏ câu thoại / tag không còn trong beat (beat đã đổi ở màn 4 / 5) để không kẹt lỗi không gỡ được. */
+function donShot(kb: KichBanData, canhId: string, c: PhanCanhCanh): PhanCanhCanh {
+  const beats: Record<string, PhanCanhBeat> = {};
+  Object.entries(c.beats).forEach(([id, pb]) => {
+    const b = beatsOf(kb, canhId).find((x) => x.id === id);
+    beats[id] = b ? { ...pb, shots: pb.shots.map((s) => ({ ...s, thoai: s.thoai.filter((n) => n >= 0 && n < b.thoai.length), trongKhung: s.trongKhung.filter((t) => b.coMat.includes(t)) })) } : pb;
+  });
+  return { ...c, beats };
+}
 
 export default function PhanCanhScreen({ project, onUpdate, onGo }: Props) {
   const { busy, error, notes, run } = useRunner();
@@ -61,7 +71,7 @@ export default function PhanCanhScreen({ project, onUpdate, onGo }: Props) {
       const c = x.canh[canhId] || { beats: {}, dauVao: dauVaoPhanCanh(latestRef.current.sections.kichBan!.data, canhId), updatedAt: 0 };
       const old = c.beats[beatId] || { shots: [], soShot: 1 };
       const g = ganMaShot(beatId, fn(old.shots), old.soShot);
-      return { canh: { ...x.canh, [canhId]: { ...c, beats: { ...c.beats, [beatId]: g }, updatedAt: Date.now() } } };
+      return { canh: { ...x.canh, [canhId]: donShot(latestRef.current.sections.kichBan!.data, canhId, { ...c, beats: { ...c.beats, [beatId]: g }, updatedAt: Date.now() }) } };
     });
 
   /** Tự làm: mỗi beat một shot dài cả beat, thoại cả beat. */
@@ -69,11 +79,15 @@ export default function PhanCanhScreen({ project, onUpdate, onGo }: Props) {
     edit((x) => {
       const k = latestRef.current.sections.kichBan!.data;
       const beats: Record<string, PhanCanhBeat> = {};
-      beatsOf(k, canhId).forEach((b) => (beats[b.id] = ganMaShot(b.id, [{ ...blankShot(b.giay, b.coMat), thoai: b.thoai.map((_, n) => n) }], 1)));
+      beatsOf(k, canhId).forEach((b) => (beats[b.id] = ganMaShot(b.id, [{ ...blankShot(b.giay, b.coMat), thoai: b.thoai.map((_, n) => n) }], x.canh[canhId]?.beats[b.id]?.soShot || 1)));
       return { canh: { ...x.canh, [canhId]: { beats, dauVao: dauVaoPhanCanh(k, canhId), updatedAt: Date.now() } } };
     });
 
-  const vanDung = (canhId: string) => edit((x) => (x.canh[canhId] ? { canh: { ...x.canh, [canhId]: { ...x.canh[canhId], dauVao: dauVaoPhanCanh(latestRef.current.sections.kichBan!.data, canhId) } } } : x));
+  const vanDung = (canhId: string) =>
+    edit((x) => {
+      const k = latestRef.current.sections.kichBan!.data;
+      return x.canh[canhId] ? { canh: { ...x.canh, [canhId]: { ...donShot(k, canhId, x.canh[canhId]), dauVao: dauVaoPhanCanh(k, canhId) } } } : x;
+    });
 
   /* ---------- AI ---------- */
 
@@ -95,7 +109,15 @@ export default function PhanCanhScreen({ project, onUpdate, onGo }: Props) {
     setSection((latest) => {
       const now = Date.now();
       const s = latest.sections.phanCanh;
-      const moi = { beats: r.output, dauVao, updatedAt: now };
+      // Mã shot: giữ mã AI trả lại chỉ khi sửa theo yêu cầu và mã đó vốn có; còn lại cấp số mới từ bộ đếm đã lưu
+      const old = s?.data.canh[canhId]?.beats || {};
+      const beats: Record<string, PhanCanhBeat> = {};
+      Object.entries(r.output).forEach(([bid, pb]) => {
+        const cu = new Set((old[bid]?.shots || []).map((x) => x.id));
+        const shots = pb.shots.map((x) => ({ ...x, id: yeuCau && cu.has(x.id) ? x.id : '' }));
+        beats[bid] = ganMaShot(bid, shots, Math.max(old[bid]?.soShot || 1, 1));
+      });
+      const moi = { beats, dauVao, updatedAt: now };
       // Lần đầu: tạo phần mới với phiên bản màn trên lúc bấm nút; sau đó: ghi một cảnh vào phần đã có
       return s ? editSection(s, { canh: { ...s.data.canh, [canhId]: moi } }, now) : freshSection(latest, 'phanCanh', { canh: { [canhId]: moi } }, now, readRevs);
     });
@@ -107,15 +129,15 @@ export default function PhanCanhScreen({ project, onUpdate, onGo }: Props) {
     setDangLam({ id: canhId, kind: yeuCau ? 'sua' : 'lam' });
     await run('canh', async () => {
       try {
-        await lamCanh(canhId, yeuCau);
+        return (await lamCanh(canhId, yeuCau)) || undefined;
       } finally {
         setDangLam(null);
       }
     });
   };
 
-  /** Phân cảnh lần lượt mọi cảnh chưa làm; dừng khi một cảnh còn lỗi sau 3 lần thử hoặc khi bạn bấm dừng. */
-  const lamTatCa = () => {
+  /** Phân cảnh lần lượt các cảnh ở tình trạng cần làm; dừng khi một cảnh còn lỗi sau 3 lần thử hoặc khi bạn bấm dừng. */
+  const lamTatCa = (can: 'chua-lam' | 'can-xem-lai' = 'chua-lam') => {
     stopRef.current = false;
     const tried = new Set<string>();
     run('tat-ca', async () => {
@@ -125,10 +147,10 @@ export default function PhanCanhScreen({ project, onUpdate, onGo }: Props) {
           const p = latestRef.current;
           const k = p.sections.kichBan!.data;
           const cur = p.sections.phanCanh?.data || emptyPhanCanh();
-          const i = k.danY.canh.findIndex((c) => tinhTrangPhanCanh(cur, k, c.id) === 'chua-lam');
+          // Bỏ qua cảnh đã làm trong lượt này (phòng khi giao diện chưa kịp nhận bản mới)
+          const i = k.danY.canh.findIndex((c) => !tried.has(c.id) && tinhTrangPhanCanh(cur, k, c.id) === can);
           if (i < 0) break;
           const c = k.danY.canh[i];
-          if (tried.has(c.id)) break;
           tried.add(c.id);
           setTienDo(`Đang phân cảnh ${i + 1}/${k.danY.canh.length}…`);
           setDangLam({ id: c.id, kind: 'lam' });
@@ -142,6 +164,16 @@ export default function PhanCanhScreen({ project, onUpdate, onGo }: Props) {
         setDangLam(null);
       }
     });
+  };
+
+  /** Nút "Tạo lại" khi đã cũ: phân cảnh lại các cảnh cần xem lại. */
+  const lamLaiCanXemLai = async () => {
+    const n = scenes.filter((c) => tinhTrangPhanCanh(pc, kb, c.id) === 'can-xem-lai').length;
+    if (!n) {
+      await notify('Không cảnh nào cần xem lại. Nếu màn trên đổi mà phân cảnh vẫn đúng, bấm "Giữ nguyên và duyệt lại".');
+      return;
+    }
+    if (await askConfirm(`Phân cảnh lại ${n} cảnh cần xem lại? Những chỗ bạn đã sửa ở các cảnh đó sẽ mất.`, { okLabel: 'Phân cảnh lại' })) lamTatCa('can-xem-lai');
   };
 
   const approve = () => setSection((latest) => (latest.sections.phanCanh ? approveSection(latest, 'phanCanh', latest.sections.phanCanh, Date.now()) : undefined));
@@ -176,7 +208,7 @@ export default function PhanCanhScreen({ project, onUpdate, onGo }: Props) {
               <Square className="w-4 h-4" /> Dừng sau cảnh này
             </button>
           )}
-          <RunButton onClick={lamTatCa} busy={busy === 'tat-ca'} busyLabel={tienDo ? `${tienDo} Đừng rời màn này.` : 'AI đang phân cảnh…'} icon={Clapperboard} disabled={aiOff || daLam === scenes.length}>
+          <RunButton onClick={() => lamTatCa()} busy={busy === 'tat-ca'} busyLabel={tienDo ? `${tienDo} Đừng rời màn này.` : 'AI đang phân cảnh…'} icon={Clapperboard} disabled={aiOff || daLam === scenes.length}>
             Phân cảnh tất cả cảnh chưa làm
           </RunButton>
         </div>
@@ -194,6 +226,7 @@ export default function PhanCanhScreen({ project, onUpdate, onGo }: Props) {
           check={full.theoCanh[c.id]}
           running={dangLam?.id === c.id ? dangLam.kind : ''}
           disabled={aiOff}
+          locked={blocked}
           onRun={() => lamMot(c.id)}
           onRevise={(t) => lamMot(c.id, t)}
           onKeep={() => vanDung(c.id)}
@@ -215,7 +248,7 @@ export default function PhanCanhScreen({ project, onUpdate, onGo }: Props) {
               </ul>
             </details>
           )}
-          <StatusBar project={project} sectionKey="phanCanh" blocking={full.errors} onApprove={approve} onKeep={keep} onRegenerate={lamTatCa} busy={!!busy} />
+          <StatusBar project={project} sectionKey="phanCanh" blocking={full.errors} onApprove={approve} onKeep={keep} onRegenerate={lamLaiCanXemLai} busy={!!busy} />
           {section.meta.status === 'duyet' && !blocked && (
             <div className="flex justify-end">
               <button onClick={() => onGo('prompt')} className="py-3 px-6 rounded-xl bg-black hover:bg-gray-800 text-primary-400 font-bold flex items-center gap-2">

@@ -6,7 +6,7 @@ import { briefText } from '../format';
 import type { Brief, Character, KichBanData, PhanCanhBeat, Shot } from '../../../shared/project';
 import { toTag } from '../../../shared/project';
 import { beatsOf, dauBeat, normBeatId, trangThaiText } from '../../../shared/kichBan';
-import { CO_CANH, GOC_MAY, CHUYEN_DONG, tronNuaGiay, shotId } from '../../../shared/phanCanh';
+import { CO_CANH, GOC_MAY, CHUYEN_DONG, tronNuaGiay, ganMaShot } from '../../../shared/phanCanh';
 import { checkPhanCanhCanh, normName } from '../../../shared/checks';
 import { parseBrief, parseCharacters } from './nhanVat';
 import { parseKichBan } from './raSoat';
@@ -39,7 +39,7 @@ export function parseShots(v: unknown): Shot[] {
       chuyenDong: chon(CHUYEN_DONG, o.chuyenDong),
       moTa: str(o.moTa, 1200),
       trongKhung: Array.from(new Set(arr(o.trongKhung).map((t) => toTag(str(t, 40))).filter(Boolean))),
-      thoai: arr(o.thoai).map((k) => Math.round(Number(k))).filter((k) => Number.isFinite(k) && k >= 0),
+      thoai: Array.from(new Set(arr(o.thoai).map((k) => Math.round(Number(k))).filter((k) => Number.isFinite(k) && k >= 0))),
     };
   });
 }
@@ -67,6 +67,7 @@ export const phanCanh: TaskDef<PhanCanhInput, Record<string, PhanCanhBeat>> = {
               items: {
                 type: 'OBJECT',
                 properties: {
+                  ma: { type: 'STRING', description: 'Mã shot cũ (B007.1…) khi sửa theo yêu cầu; shot mới để trống' },
                   giay: { type: 'NUMBER', description: 'Số giây, bước 0,5' },
                   coCanh: { type: 'STRING', format: 'enum', enum: CO_CANH.map((x) => x.id) },
                   gocMay: { type: 'STRING', format: 'enum', enum: GOC_MAY.map((x) => x.id) },
@@ -109,6 +110,7 @@ export const phanCanh: TaskDef<PhanCanhInput, Record<string, PhanCanhBeat>> = {
       huong_dan: sectionFor(ctx.genre, 'phanCanh'),
       brief: briefText(i.brief),
       ti_le: i.brief.tiLe,
+      khung_doc: i.brief.tiLe === '9:16' ? 'có' : '',
       so_canh: k + 1,
       canh: `Cảnh ${k + 1} [${c.id}] · ${c.diaDiem} · ${c.thoiDiem} · Chuyển biến: ${c.chuyenBien}`,
       beats: beats
@@ -130,7 +132,7 @@ export const phanCanh: TaskDef<PhanCanhInput, Record<string, PhanCanhBeat>> = {
       chuyen_dong: ds(CHUYEN_DONG),
       ban_truoc: i.sua
         ? beats
-            .map((b) => [`[${b.id}]`, ...(i.sua!.truoc[b.id]?.shots || []).map((s, n) => `  Shot ${n + 1}: ${s.giay}s · ${s.coCanh} · ${s.gocMay} · ${s.chuyenDong} · ${s.moTa} · khung: ${s.trongKhung.map((t) => `@${t}`).join(', ')} · thoại: ${s.thoai.map((x) => x + 1).join(', ') || '—'}`)].join('\n'))
+            .map((b) => [`[${b.id}]`, ...(i.sua!.truoc[b.id]?.shots || []).map((s, n) => `  Shot ${n + 1} [${s.id}]: ${s.giay}s · ${s.coCanh} · ${s.gocMay} · ${s.chuyenDong} · ${s.moTa} · khung: ${s.trongKhung.map((t) => `@${t}`).join(', ')} · thoại: ${s.thoai.map((x) => x + 1).join(', ') || '—'}`)].join('\n'))
             .join('\n')
         : '',
       yeu_cau_sua: i.sua?.yeuCau || '',
@@ -141,8 +143,18 @@ export const phanCanh: TaskDef<PhanCanhInput, Record<string, PhanCanhBeat>> = {
     const out: Record<string, PhanCanhBeat> = {};
     beatsCuaCanh(i).forEach((b) => {
       const r = rows.find((x) => normBeatId(str(x.ma, 20)) === b.id);
-      const shots = parseShots(r ? r.shots : []).map((s, k) => ({ ...s, id: shotId(b.id, k + 1), thoai: s.thoai.map((n) => n - 1).filter((n) => n >= 0) }));
-      out[b.id] = { shots, soShot: shots.length + 1 };
+      // Sửa theo yêu cầu: shot giữ lại mang đúng mã cũ; shot mới nhận số tiếp theo (không đánh lại số, không dùng lại số đã xoá)
+      const truoc = i.sua?.truoc[b.id];
+      const cu = new Set((truoc?.shots || []).map((s) => s.id));
+      const dung = new Set<string>();
+      const shots = arr(r ? r.shots : []).map((raw) => {
+        const s = parseShots([raw])[0];
+        const ma = str(obj(raw).ma, 30).toUpperCase();
+        const id = cu.has(ma) && !dung.has(ma) ? ma : '';
+        if (id) dung.add(id);
+        return { ...s, id, thoai: s.thoai.map((n) => n - 1).filter((n) => n >= 0) };
+      });
+      out[b.id] = ganMaShot(b.id, shots, truoc?.soShot || 1);
     });
     return out;
   },

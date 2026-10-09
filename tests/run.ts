@@ -1010,6 +1010,30 @@ await test('tác vụ phân cảnh: AI giả → mã shot, giây làm tròn 0,5,
   assert.ok(deps.prompts[1].includes('Tổng giây các shot'));
 });
 
+/* ---------------- Màn ⑦ — các lỗi đã sửa sau lượt soát ---------------- */
+
+await test('phân cảnh sửa theo yêu cầu: shot giữ lại mang mã cũ, shot mới nhận số sau bộ đếm (không dùng lại số đã xoá)', async () => {
+  const kb = kbBible();
+  const b = beatsOf(kb, 'S1')[0];
+  const truoc = { [b.id]: { shots: [{ ...blankShot(2, ['lan']), id: `${b.id}.1`, moTa: 'a' }, { ...blankShot(b.giay - 2, ['lan']), id: `${b.id}.3`, moTa: 'b' }], soShot: 4 } };
+  const others = beatsOf(kb, 'S1').slice(1).map((x) => ({ ma: x.id, shots: [{ giay: x.giay, coCanh: 'trung', gocMay: 'ngang', chuyenDong: 'tinh', moTa: 'c', trongKhung: x.coMat, thoai: x.thoai.map((_, n) => n + 1) }] }));
+  const raw = { beats: [{ ma: b.id, shots: [{ ma: `${b.id}.3`, giay: 2, coCanh: 'can', gocMay: 'ngang', chuyenDong: 'tinh', moTa: 'b2', trongKhung: ['lan'], thoai: [] }, { ma: '', giay: b.giay - 2, coCanh: 'trung', gocMay: 'ngang', chuyenDong: 'tinh', moTa: 'mới', trongKhung: ['lan'], thoai: [] }] }, ...others] };
+  const r = await runTask(phanCanh, { brief, nhanVat: chars, kichBan: { danY: kb.danY, canh: kb.canh }, canhId: 'S1', sua: { truoc, yeuCau: 'đổi' } }, 'p1', fakeDeps([raw]));
+  assert.deepEqual(r.output[b.id].shots.map((x) => x.id), [`${b.id}.3`, `${b.id}.4`]);
+  assert.equal(r.output[b.id].soShot, 5);
+});
+
+await test('phân cảnh: "cho" không bị coi là tên địa điểm "Chợ"; "thư thả" không tắt cảnh báo người nói ngoài khung', () => {
+  const kb = kbBible();
+  const b = { ...beatsOf(kb, 'S1')[0], thoai: [{ ai: 'lan', cachNoi: 'thư thả', cau: 'Ừ.' }] };
+  const shots: Shot[] = [{ ...blankShot(b.giay, []), id: 'x.1', moTa: 'Lan đưa cho mẹ cái cốc ở chợ.', thoai: [0] }];
+  const w = checkPhanCanhCanh([b], { beats: { [b.id]: { shots, soShot: 2 } }, dauVao: '', updatedAt: 0 }, { diaDiem: ['Chợ', 'cho'] }).warnings;
+  assert.ok(w.some((x) => x.includes('tên địa điểm')), 'chữ "chợ" (đúng dấu) vẫn phải cảnh báo');
+  const w2 = checkPhanCanhCanh([b], { beats: { [b.id]: { shots: [{ ...shots[0], moTa: 'Lan đưa cho mẹ cái cốc.' }], soShot: 2 } }, dauVao: '', updatedAt: 0 }, { diaDiem: ['Chợ', 'cho'] }).warnings;
+  assert.ok(!w2.some((x) => x.includes('tên địa điểm')), 'chữ "cho" không phải địa điểm');
+  assert.ok(w2.some((x) => x.includes('không ở trong khung')));
+});
+
 /* ---------------- Kết quả ---------------- */
 
 console.log(`\n${passed} test đạt, ${failures.length} test lỗi.`);

@@ -28,7 +28,7 @@ function GiayField({ id, value, onChange }: { id: string; value: number; onChang
       onChange={(e) => setText(e.target.value)}
       onBlur={() => {
         const n = tronNuaGiay(Number(text.replace(',', '.')));
-        if (n !== value) onChange(n);
+        if (Number.isFinite(n) && n !== value) onChange(n);
         else setText(show(value));
       }}
       className={`${fieldCls} w-20`}
@@ -91,6 +91,25 @@ function ShotRow({ b, s, moc, k, chars, onChange, onSplit, onAdd, onRemove }: {
           })}
         </div>
       )}
+      {(s.thoai.some((n) => n >= b.thoai.length) || s.trongKhung.some((t) => !b.coMat.includes(t))) && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-xs font-bold text-red-700 mr-1">Không còn trong beat (bấm để gỡ):</span>
+          {s.trongKhung
+            .filter((t) => !b.coMat.includes(t))
+            .map((t) => (
+              <button key={t} onClick={() => onChange({ trongKhung: s.trongKhung.filter((x) => x !== t) })} className="px-2.5 py-1 rounded-full text-xs font-bold border border-red-300 text-red-700 bg-red-50">
+                @{t} ✕
+              </button>
+            ))}
+          {s.thoai
+            .filter((n) => n >= b.thoai.length)
+            .map((n) => (
+              <button key={n} onClick={() => onChange({ thoai: s.thoai.filter((x) => x !== n) })} className="px-2.5 py-1 rounded-full text-xs font-bold border border-red-300 text-red-700 bg-red-50">
+                Câu {n + 1} ✕
+              </button>
+            ))}
+        </div>
+      )}
       {b.thoai.length > 0 && (
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="text-xs font-bold text-gray-600 mr-1">Thoại:</span>
@@ -129,6 +148,8 @@ interface Props {
   check?: CheckResult & { theoBeat: Record<string, CheckResult> };
   running: '' | 'lam' | 'sua';
   disabled: boolean;
+  /** Màn trên chưa chốt: không xác nhận "Vẫn đúng" / "Tự làm" theo bản nháp */
+  locked: boolean;
   onRun: () => void;
   onRevise: (text: string) => void;
   onKeep: () => void;
@@ -136,7 +157,7 @@ interface Props {
   onShots: (beatId: string, fn: (shots: Shot[]) => Shot[]) => void;
 }
 
-export default function CanhShots({ no, canh, beats, pc, tinhTrang, chars, check, running, disabled, onRun, onRevise, onKeep, onManual, onShots }: Props) {
+export default function CanhShots({ no, canh, beats, pc, tinhTrang, chars, check, running, disabled, locked, onRun, onRevise, onKeep, onManual, onShots }: Props) {
   const tt = TINH_TRANG[tinhTrang];
   const daLam = tinhTrang !== 'chua-lam';
   const ten = (t: string) => chars.find((c) => c.tag === t)?.ten || t;
@@ -155,7 +176,7 @@ export default function CanhShots({ no, canh, beats, pc, tinhTrang, chars, check
       {tinhTrang === 'can-xem-lai' && (
         <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 flex flex-wrap items-center gap-2">
           <span className="flex-1 min-w-[12rem]">Beat của cảnh này đã đổi ở màn 4 / 5 sau khi phân cảnh. Làm lại, hoặc xác nhận vẫn đúng.</span>
-          <button onClick={onKeep} disabled={!!running} className="px-3 py-1.5 rounded-full bg-white border border-amber-300 font-bold flex items-center gap-1.5 disabled:opacity-50">
+          <button onClick={onKeep} disabled={!!running || locked} className="px-3 py-1.5 rounded-full bg-white border border-amber-300 font-bold flex items-center gap-1.5 disabled:opacity-50">
             <Check className="w-4 h-4" /> Vẫn đúng
           </button>
         </div>
@@ -219,7 +240,7 @@ export default function CanhShots({ no, canh, beats, pc, tinhTrang, chars, check
           {daLam ? 'Phân cảnh lại' : 'Phân cảnh'}
         </RunButton>
         {!daLam && (
-          <button onClick={onManual} disabled={!!running} className="px-4 py-2.5 rounded-xl bg-gray-100 hover:bg-primary-100 font-bold flex items-center gap-2 disabled:opacity-50">
+          <button onClick={onManual} disabled={!!running || locked} className="px-4 py-2.5 rounded-xl bg-gray-100 hover:bg-primary-100 font-bold flex items-center gap-2 disabled:opacity-50">
             <PenLine className="w-4 h-4" /> Tự làm
           </button>
         )}
