@@ -25,11 +25,13 @@ Cập nhật: 2026-10-09. Mọi thiết kế và code sau này phải khớp v�
 
 - **Scene** = các beat cùng một bối cảnh và một mạch thời gian.
 - Màn sau chỉ đọc **bản đã duyệt** của các màn trước. Sửa màn trên thì màn dưới hiện cờ **"đã cũ"**.
+- Màn ⑥ trở đi đọc **kịch bản chốt** (sau khi ⑤ duyệt). Sửa nhận ở ⑤ được ghi thẳng vào ④.
 
 ## 3. Dữ liệu
 
 - Kịch bản lưu **dạng dữ liệu có cấu trúc** (cảnh → beat → các ô). App hiển thị như văn bản, xuất ra file khi cần.
 - Mỗi mục có **mã cố định**, **trạng thái** (nháp / đã duyệt / đã cũ), và **dựa trên phiên bản nào** của mục phía trên.
+- Trạng thái người / vật ghi theo dòng, mỗi tag một dòng. Trạng thái đầu beat do code lấy từ cuối beat trước.
 
 ## 4. Kiến thức thể loại
 
