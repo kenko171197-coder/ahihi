@@ -1,4 +1,4 @@
-# Xưởng phim AI — lượt 3a
+# Xưởng phim AI — lượt 3
 
 Đi từ ý tưởng tới prompt video cho Gemini Omni Flash, qua 3 giai đoạn, 8 màn. Mọi quyết định thiết kế: `docs/QUYET-DINH.md`.
 
@@ -33,7 +33,11 @@
   - **Ảnh tham chiếu**: gửi ảnh theo lô, AI quét gán @tag (cả bối cảnh), mỗi ảnh có vai trò cho màn ⑧.
   - Kịch bản đổi → "Bóc tách lại": giữ phần đã làm, thêm mục mới, đánh dấu mục không còn dùng.
 
-Màn ⑦ ⑧: lượt 3b–4.
+## Đã làm ở lượt 3b
+
+- **Màn ⑦ Phân cảnh:** mỗi beat chia thành shot — số giây (bước 0,5), cỡ cảnh, góc máy, chuyển động (chọn trong danh sách, app tự ghép câu máy tiếng Anh cho màn ⑧), ô **Mô tả** tiếng Việt (nguồn duy nhất cho câu hành động), ai / vật trong khung, câu thoại nào nói trong shot. AI làm từng cảnh ("Phân cảnh tất cả" chạy lần lượt); sửa tay, thêm / xoá / tách shot, mốc giây tự tính. Beat của cảnh đổi ở màn ④ ⑤ → cảnh đó "cần xem lại".
+
+Màn ⑧: lượt 4.
 
 ## Cấu trúc
 
