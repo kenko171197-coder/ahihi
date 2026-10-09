@@ -38,6 +38,7 @@ export const FEATURE_NAMES: Record<string, string> = {
   '/api/task/bible-dao-cu': '⑥ Đạo cụ',
   '/api/task/bible-boi-canh': '⑥ Bối cảnh',
   '/api/task/phan-canh': '⑦ Phân cảnh',
+  '/api/task/prompt-canh': '⑧ Dịch prompt',
   '/api/match-images': '⑥ Quét ảnh gán @tag',
   '/api/test-key': 'Kiểm tra key',
 };

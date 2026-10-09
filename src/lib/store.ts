@@ -42,9 +42,13 @@ function upgrade(p: any): Project | null {
 export const loadProjects = (): Project[] => read<any[]>(KEY, []).map(upgrade).filter((p): p is Project => !!p);
 export const saveProjects = (v: Project[]) => write(KEY, v);
 
-/** Mọi ảnh của dự án (ảnh tham chiếu ở màn ⑥; ảnh của màn ⑥ tạm cũ nếu còn). */
+/** Mọi ảnh của dự án (ảnh tham chiếu ở màn ⑥, frame nối ở màn ⑧; ảnh của màn ⑥ tạm cũ nếu còn). */
 export const imageIdsOf = (p: Project) =>
-  [...Object.values(p.sections.bible?.data.anh || {}).map((a) => a.imageId), ...((p as any).thietKeTam?.assets || []).map((a: any) => a?.imageId)].filter(
+  [
+    ...Object.values(p.sections.bible?.data.anh || {}).map((a) => a.imageId),
+    ...Object.values(p.sections.prompt?.data.frame || {}),
+    ...((p as any).thietKeTam?.assets || []).map((a: any) => a?.imageId),
+  ].filter(
     (x): x is string => typeof x === 'string' && !!x
   );
 

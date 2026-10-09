@@ -7,6 +7,7 @@ import { danYCanh, vietCanh } from './defs/kichBan';
 import { raSoat } from './defs/raSoat';
 import { bibleStyle, bibleNhanVat, bibleDaoCu, bibleBoiCanh } from './defs/bible';
 import { phanCanh } from './defs/phanCanh';
+import { promptCanh } from './defs/prompt';
 
 export const TASK_DEFS: Record<string, TaskDef<any, any>> = {
   [hoiLai.id]: hoiLai,
@@ -21,4 +22,5 @@ export const TASK_DEFS: Record<string, TaskDef<any, any>> = {
   [bibleDaoCu.id]: bibleDaoCu,
   [bibleBoiCanh.id]: bibleBoiCanh,
   [phanCanh.id]: phanCanh,
+  [promptCanh.id]: promptCanh,
 };

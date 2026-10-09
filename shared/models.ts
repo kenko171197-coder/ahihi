@@ -60,6 +60,7 @@ export const TASKS: { key: string; label: string; model: string; why: string }[]
   { key: 'bible-dao-cu', label: '⑥ Đạo cụ', model: 'gemini-3.8-flash', why: 'Mô tả cố định và prompt ảnh đạo cụ' },
   { key: 'bible-boi-canh', label: '⑥ Bối cảnh, ánh sáng từng cảnh', model: 'gemini-3.8-flash', why: 'Mô tả không gian và câu ánh sáng chép vào mọi beat' },
   { key: 'phan-canh', label: '⑦ Phân cảnh', model: 'gemini-3.8-flash', why: 'Gọi một lần mỗi cảnh, cần cảm quan máy quay và giữ luật số giây' },
+  { key: 'prompt-canh', label: '⑧ Dịch prompt từng cảnh', model: 'gemini-3.8-flash', why: 'Gọi một lần mỗi cảnh, chỉ dịch sang tiếng Anh và giữ đúng @tag' },
   { key: 'match', label: '⑥ Quét ảnh gán @tag', model: 'gemini-3.1-flash-lite', why: 'So ảnh với mô tả, bạn duyệt lại' },
   { key: 'testkey', label: 'Kiểm tra key', model: 'gemini-3.1-flash-lite', why: 'Chỉ gọi thử' },
 ];

@@ -31,6 +31,10 @@ import {
   toTag, uniqueTag, fmtGiay, Project, TreatmentData, Character,
 } from '../shared/project';
 import { sentenceCount } from '../server/tasks/util';
+import { promptCanh } from '../server/tasks/defs/prompt';
+import { ghepBeat, ghepCanh, nguonCanh, khopDich, dauVaoPrompt, tinhTrangPrompt, checkPromptDich, emptyPrompt, ngonNguEn, FRAME_TAG, MOT_SHOT, KHONG_CHU, GhepCtx } from '../shared/prompt';
+import { xuatPromptTxt, xuatKichBanTxt } from '../shared/xuat';
+import type { PromptBeat } from '../shared/project';
 
 let passed = 0;
 const failures: string[] = [];
@@ -153,6 +157,48 @@ function goodBible(): BibleData {
   };
 }
 
+/** Phân cảnh hợp lệ: beat ≥ 4s chia 2 shot (2s + phần còn lại), thoại vào shot cuối. */
+function pcHaiShot(kb: KichBanData): PhanCanhData {
+  const pc: PhanCanhData = { canh: {} };
+  kb.danY.canh.forEach((c) => {
+    const beats: PhanCanhData['canh'][string]['beats'] = {};
+    beatsOf(kb, c.id).forEach((b) => {
+      const parts = b.giay >= 4 ? [2, b.giay - 2] : [b.giay];
+      const shots = parts.map((g, k) => ({ ...blankShot(g, b.coMat), moTa: `Lan làm việc ${k + 1}.`, thoai: k === parts.length - 1 ? b.thoai.map((_, n) => n) : [] }));
+      beats[b.id] = ganMaShot(b.id, shots, 1);
+    });
+    pc.canh[c.id] = { beats, dauVao: dauVaoPhanCanh(kb, c.id), updatedAt: 1 };
+  });
+  return pc;
+}
+
+/** Bản dịch hợp lệ của một cảnh (như AI trả đúng luật). */
+function goodDich(kb: KichBanData, pc: PhanCanhData, canhId: string): Record<string, PromptBeat> {
+  const out: Record<string, PromptBeat> = {};
+  nguonCanh(kb, pc.canh[canhId], canhId).forEach((n) => {
+    const shots: Record<string, string> = {};
+    n.shots.forEach((s, k) => (shots[s.id] = k === 0 ? '@lan looks around and takes a slow breath.' : `@lan ${n.khung.includes('thungxop') ? 'lifts the lid of @thungxop' : 'sits down on the bed'} and stays still.`));
+    out[n.beat.id] = {
+      lucBatDau: n.dau.map((l) => ({ tag: l.tag, cau: `@${l.tag} stands near the door.` })),
+      shots,
+      ambient: 'a ceiling fan humming',
+      music: 'soft solo piano',
+      thoai: n.beat.thoai.map(() => ({ cachNoi: 'warmly', nguoiNoi: "Lan's mother over the phone" })),
+      giuDung: ['Her bag stays on her shoulder.', 'Nobody else appears.'],
+    };
+  });
+  return out;
+}
+
+/** Ngữ cảnh ghép prompt đầy đủ: mọi cảnh đã dịch. */
+function goodGhep(): GhepCtx {
+  const kb = kbBible();
+  const pc = pcHaiShot(kb);
+  const prompt = emptyPrompt();
+  kb.danY.canh.forEach((c) => (prompt.canh[c.id] = { beats: goodDich(kb, pc, c.id), dauVao: dauVaoPrompt(nguonCanh(kb, pc.canh[c.id], c.id), brief.nhacNen as any), updatedAt: 1 }));
+  return { brief: brief as any, nhanVat: chars, kb, pc, bible: goodBible(), prompt };
+}
+
 function bibleInput(bible: BibleData = goodBible()) {
   const kb = kbBible();
   return { brief, nhanVat: chars, kichBan: { danY: kb.danY, canh: kb.canh }, bible };
@@ -180,6 +226,7 @@ await test('mọi file prompt chỉ dùng biến mà tác vụ cung cấp', () =
     'bible-dao-cu': bibleInput(),
     'bible-boi-canh': bibleInput(),
     'phan-canh': { brief, nhanVat: chars, kichBan: { danY: kbBible().danY, canh: kbBible().canh }, canhId: 'S2' },
+    'prompt-canh': { brief, nhanVat: chars, kichBan: { danY: kbBible().danY, canh: kbBible().canh }, phanCanh: pcHaiShot(kbBible()).canh.S2, canhId: 'S2' },
   };
   for (const [id, def] of Object.entries(TASK_DEFS)) {
     const input = def.parseInput(samples[id]);
@@ -1032,6 +1079,160 @@ await test('phân cảnh: "cho" không bị coi là tên địa điểm "Chợ";
   const w2 = checkPhanCanhCanh([b], { beats: { [b.id]: { shots: [{ ...shots[0], moTa: 'Lan đưa cho mẹ cái cốc.' }], soShot: 2 } }, dauVao: '', updatedAt: 0 }, { diaDiem: ['Chợ', 'cho'] }).warnings;
   assert.ok(!w2.some((x) => x.includes('tên địa điểm')), 'chữ "cho" không phải địa điểm');
   assert.ok(w2.some((x) => x.includes('không ở trong khung')));
+});
+
+
+/* ---------------- Màn ⑧ — Prompt ---------------- */
+
+await test('prompt: ghép đủ 6 phần đúng thứ tự, code chép nguyên văn phần cố định', () => {
+  const ctx = goodGhep();
+  const b = beatsOf(ctx.kb, 'S1')[0];
+  const r = ghepBeat(ctx, 'S1', b.id);
+  assert.deepEqual(r.errors, []);
+  const parts = r.text.split('\n\n');
+  assert.equal(parts.length, 6, r.text);
+  assert.ok(parts[0].startsWith('Using the provided images: @lan as Lan in her cardigan, @phongtro as the rented room.'), parts[0]);
+  assert.ok(parts[1].startsWith('Cinematic photorealistic live-action'), 'phần ② bắt đầu bằng style');
+  assert.ok(parts[1].includes('A small rented room') && parts[1].includes('Cold white ceiling tube light'), 'bối cảnh + ánh sáng chép nguyên văn');
+  assert.equal(parts[2], 'At the start: @lan stands near the door.');
+  assert.ok(parts[3].startsWith('[00:00–00:02] Medium shot, eye level, static camera. @lan looks around'), parts[3]);
+  assert.ok(parts[3].includes(' Hard cut to [00:02–00:06] '), parts[3]);
+  assert.ok(parts[4].startsWith('Ambient: a ceiling fan humming. Music: soft solo piano.'), parts[4]);
+  assert.ok(parts[5].startsWith('Exactly 2 shots, joined by hard cuts.') && parts[5].endsWith(KHONG_CHU), parts[5]);
+  assert.ok(r.warnings.some((w) => w.includes('Chưa có ảnh @lan')), 'thiếu ảnh chỉ cảnh báo');
+});
+
+await test('prompt: beat một shot dặn quay liền; phim không nhạc thì Music: none', () => {
+  const ctx = goodGhep();
+  const b = beatsOf(ctx.kb, 'S4')[0];
+  ctx.pc.canh.S4.beats[b.id] = ganMaShot(b.id, [{ ...blankShot(b.giay, ['lan']), moTa: 'Lan ăn.' }], 5);
+  ctx.prompt.canh.S4.beats = goodDich(ctx.kb, ctx.pc, 'S4');
+  let r = ghepBeat(ctx, 'S4', b.id);
+  assert.ok(r.text.includes(MOT_SHOT) && !r.text.includes('Hard cut'), r.text);
+  r = ghepBeat({ ...ctx, brief: { ...ctx.brief, nhacNen: 'khong' } }, 'S4', b.id);
+  assert.ok(r.text.includes('Music: none.') && !r.text.includes('piano'));
+});
+
+await test('prompt: thoại giữ nguyên văn, ghi mốc shot, giọng chép từ bible; người không có ảnh dùng tên AI dịch', () => {
+  const ctx = goodGhep();
+  const b = beatsOf(ctx.kb, 'S2')[0];
+  const r = ghepBeat(ctx, 'S2', b.id);
+  assert.deepEqual(r.errors, []);
+  assert.ok(r.text.includes(`Dialogue [00:02–00:06]: Lan's mother over the phone (middle aged woman, warm gentle voice, Northern Vietnamese accent) says warmly in Vietnamese: "Nhận được chưa con?"`), r.text);
+  assert.ok(r.text.includes('@thungxop as the white foam box'), 'đạo cụ trong khung được nạp');
+  assert.equal(ngonNguEn('tiếng Việt'), 'Vietnamese');
+  assert.equal(ngonNguEn('tiếng Anh'), 'English');
+  assert.equal(ngonNguEn('tiếng Mường'), '');
+});
+
+await test('prompt: nhân vật đổi bộ đồ → cảnh đó nạp và gọi đúng tag bộ đồ', () => {
+  const ctx = goodGhep();
+  ctx.bible = { ...ctx.bible, nhanVat: ctx.bible.nhanVat.map((n) => (n.tag === 'lan' ? { ...n, bo: [{ ...n.bo[0], canh: ['S1', 'S2', 'S3'] }, { ...n.bo[0], tag: 'lanngu', ten: 'đồ ngủ', canh: ['S4'], vaiTro: 'Lan in her pajamas' }] } : n)) };
+  const s4 = ghepBeat(ctx, 'S4', beatsOf(ctx.kb, 'S4')[0].id);
+  assert.deepEqual(s4.errors, []);
+  assert.ok(s4.text.includes('@lanngu as Lan in her pajamas') && s4.text.includes('At the start: @lanngu stands') && !/@lan\b/.test(s4.text), s4.text);
+  const s1 = ghepBeat(ctx, 'S1', beatsOf(ctx.kb, 'S1')[0].id);
+  assert.ok(s1.text.includes('@lan as Lan in her cardigan') && !s1.text.includes('lanngu'));
+});
+
+await test('prompt: frame nối chỉ dùng cho beat sau trong cùng cảnh', () => {
+  const ctx = goodGhep();
+  const s1 = beatsOf(ctx.kb, 'S1');
+  let r = ghepBeat(ctx, 'S1', s1[1].id);
+  assert.ok(r.chuaCoFrame && !r.text.includes(FRAME_TAG), 'chưa có frame → vẫn ghép, ghi chú độ khớp thấp');
+  assert.equal(ghepBeat(ctx, 'S1', s1[0].id).chuaCoFrame, false, 'beat đầu cảnh không cần frame');
+  ctx.prompt.frame[s1[0].id] = 'img_a';
+  ctx.prompt.frame[s1[1].id] = 'img_b';
+  r = ghepBeat(ctx, 'S1', s1[1].id);
+  assert.ok(r.text.includes(`@${FRAME_TAG} is the final frame of the previous clip`) && r.anh.some((a) => a.tag === FRAME_TAG && a.imageId === 'img_a'));
+  assert.deepEqual(r.errors, []);
+  const s2 = ghepBeat(ctx, 'S2', beatsOf(ctx.kb, 'S2')[0].id);
+  assert.ok(!s2.text.includes(FRAME_TAG), 'sang cảnh mới không dùng frame của cảnh trước');
+});
+
+await test('prompt: phần không gian giống từng chữ trong cảnh; đổi style thì tự ghép lại, không cần dịch lại', () => {
+  const ctx = goodGhep();
+  const list = ghepCanh(ctx, 'S3');
+  assert.ok(list.length > 1 && list.every((r) => r.khongGian === list[0].khongGian && !r.errors.length));
+  const ctx2 = { ...ctx, bible: { ...ctx.bible, style: 'Warm 2D hand drawn animation, soft pastel colors.' } };
+  assert.ok(ghepCanh(ctx2, 'S3').every((r) => r.text.includes('Warm 2D hand drawn animation')));
+  assert.equal(tinhTrangPrompt(ctx2.prompt, ctx2.kb, ctx2.pc, 'S3', 'ai-de-xuat'), 'da-dich');
+});
+
+await test('prompt: sửa mô tả shot → cảnh cần dịch lại; đổi số giây / máy thì không', () => {
+  const ctx = goodGhep();
+  const b = beatsOf(ctx.kb, 'S3')[0];
+  const pb = ctx.pc.canh.S3.beats[b.id];
+  const pc2 = { canh: { ...ctx.pc.canh, S3: { ...ctx.pc.canh.S3, beats: { ...ctx.pc.canh.S3.beats, [b.id]: { ...pb, shots: pb.shots.map((s, k) => (k === 0 ? { ...s, giay: s.giay + 0.5, coCanh: 'can' as const } : { ...s, giay: s.giay - 0.5 })) } } } } };
+  assert.equal(tinhTrangPrompt(ctx.prompt, ctx.kb, pc2, 'S3', 'ai-de-xuat'), 'da-dich');
+  assert.ok(ghepBeat({ ...ctx, pc: pc2 }, 'S3', b.id).text.includes('[00:00–00:02.5] Close-up'));
+  const pc3 = { canh: { ...ctx.pc.canh, S3: { ...ctx.pc.canh.S3, beats: { ...ctx.pc.canh.S3.beats, [b.id]: { ...pb, shots: pb.shots.map((s, k) => (k === 0 ? { ...s, moTa: 'Khác.' } : s)) } } } } };
+  assert.equal(tinhTrangPrompt(ctx.prompt, ctx.kb, pc3, 'S3', 'ai-de-xuat'), 'can-dich-lai');
+  assert.equal(tinhTrangPrompt(ctx.prompt, ctx.kb, ctx.pc, 'S3', 'khong'), 'can-dich-lai', 'đổi sang không nhạc → dịch lại');
+});
+
+await test('prompt: tag không có ảnh nạp và chữ tiếng Việt bị báo lỗi', () => {
+  const ctx = goodGhep();
+  const b = beatsOf(ctx.kb, 'S1')[0];
+  const d = ctx.prompt.canh.S1.beats[b.id];
+  const sid = Object.keys(d.shots)[0];
+  ctx.prompt.canh.S1.beats[b.id] = { ...d, shots: { ...d.shots, [sid]: '@lan picks up @thungxop. Cô ấy cười.' } };
+  const r = ghepBeat(ctx, 'S1', b.id);
+  assert.ok(r.errors.some((e) => e.includes('@thungxop có trong prompt nhưng không có trong danh sách ảnh nạp')), r.errors.join('|'));
+  assert.ok(r.errors.some((e) => e.includes('tiếng Việt')));
+  const c = checkPromptDich(nguonCanh(ctx.kb, ctx.pc.canh.S1, 'S1'), ctx.prompt.canh.S1.beats);
+  assert.ok(c.errors.some((e) => e.includes('@thungxop không có trong khung')) && c.errors.some((e) => e.includes('tiếng Anh')));
+});
+
+await test('prompt: khớp bản dịch giữ câu cũ theo mã shot, thêm ô trống cho shot mới', () => {
+  const ctx = goodGhep();
+  const b = beatsOf(ctx.kb, 'S1')[0];
+  const pb = ctx.pc.canh.S1.beats[b.id];
+  const moi = ganMaShot(b.id, [...pb.shots, { ...blankShot(1, ['lan']), id: '', moTa: 'thêm' }], pb.soShot);
+  const nguon = nguonCanh(ctx.kb, { ...ctx.pc.canh.S1, beats: { ...ctx.pc.canh.S1.beats, [b.id]: moi } }, 'S1');
+  const k = khopDich(nguon, ctx.prompt.canh.S1.beats)[b.id];
+  assert.equal(k.shots[pb.shots[0].id], ctx.prompt.canh.S1.beats[b.id].shots[pb.shots[0].id]);
+  assert.equal(k.shots[moi.shots[2].id], '');
+});
+
+await test('tác vụ dịch prompt: AI giả → khớp mã beat / shot / thoại; thiếu câu thì gửi lại; không nhạc thì bỏ nhạc', async () => {
+  const kb = kbBible();
+  const pc = pcHaiShot(kb);
+  const good = goodDich(kb, pc, 'S2');
+  const raw = (dropFirst: boolean) => ({
+    beats: Object.entries(good).map(([id, d], i) => ({
+      ma: id.toLowerCase(),
+      lucBatDau: d.lucBatDau.map((x) => ({ ...x, tag: `@${x.tag}` })),
+      shots: Object.entries(d.shots).map(([sid, x], k) => ({ ma: sid.toLowerCase(), hanhDong: dropFirst && i === 0 && k === 0 ? '' : x })),
+      ambient: d.ambient,
+      music: d.music,
+      thoai: d.thoai.map((x, k) => ({ so: k + 1, ...x })),
+      giuDung: [...d.giuDung, 'Extra one.', 'Too many.'],
+    })),
+  });
+  const deps = fakeDeps([raw(true), raw(false)]);
+  const input = { brief: { ...brief, nhacNen: 'khong' }, nhanVat: chars, kichBan: { danY: kb.danY, canh: kb.canh }, phanCanh: pc.canh.S2, canhId: 'S2' };
+  const r = await runTask(promptCanh, input, 'p1', deps);
+  assert.deepEqual(r.errors, []);
+  assert.ok(deps.prompts[1].includes('chưa có câu hành động'), 'lần gửi lại có lỗi thiếu câu');
+  const b0 = beatsOf(kb, 'S2')[0].id;
+  assert.equal(r.output[b0].lucBatDau[0].tag, 'lan');
+  assert.equal(r.output[b0].thoai[0].nguoiNoi, "Lan's mother over the phone");
+  assert.equal(r.output[b0].giuDung.length, 3, 'tối đa 3 điều giữ đúng');
+  assert.equal(r.output[b0].music, '', 'phim không nhạc thì bỏ nhạc AI trả');
+  assert.ok(deps.prompts[0].includes('KHÔNG có nhạc nền'));
+  await assert.rejects(runTask(promptCanh, { ...input, phanCanh: { beats: {}, dauVao: '', updatedAt: 0 } }, 'p1', fakeDeps([])), /chưa có shot/);
+});
+
+await test('xuất file: prompt có danh sách ảnh và beat chưa dịch; kịch bản có thoại', () => {
+  const ctx = goodGhep();
+  delete ctx.prompt.canh.S4;
+  const t = xuatPromptTxt({ ...ctx, title: 'Cơm mẹ gửi', tiLe: '9:16' });
+  const b1 = beatsOf(ctx.kb, 'S1')[0].id;
+  assert.ok(t.includes(`--- ${b1} · 6s · 2 shot ---`) && t.includes('Ảnh cần nạp: @lan (CHƯA CÓ ẢNH), @phongtro (CHƯA CÓ ẢNH)'), t.slice(0, 900));
+  assert.ok(t.includes('Using the provided images:') && t.includes('(Beat chưa dịch'));
+  const k = xuatKichBanTxt({ title: 'Cơm mẹ gửi', brief: brief as any, nhanVat: chars, kb: ctx.kb });
+  assert.ok(k.includes('CẢNH 1 · PHÒNG TRỌ CỦA LAN — KHUYA') && k.includes('MẸ (qua điện thoại): Nhận được chưa con?'), k.slice(0, 600));
 });
 
 /* ---------------- Kết quả ---------------- */

@@ -356,6 +356,50 @@ export interface PhanCanhData {
   canh: Record<string, PhanCanhCanh>;
 }
 
+/* ============================ MÀN ⑧ — PROMPT ============================ */
+
+/** Một câu tiếng Anh về một người / vật lúc bắt đầu beat. */
+export interface CauTag {
+  tag: string;
+  cau: string;
+}
+
+/** Phần AI dịch cho một câu thoại (câu thoại giữ nguyên văn, code chép). */
+export interface ThoaiDich {
+  /** Cách nói, tiếng Anh ("softly") */
+  cachNoi: string;
+  /** Người nói, tiếng Anh — dùng khi người nói không có ảnh nạp ở beat (nói qua điện thoại, người qua đường) */
+  nguoiNoi: string;
+}
+
+/** Phần AI dịch của một beat. Phần cố định (ảnh, không gian, máy, giọng, thoại) do code ghép lúc hiển thị. */
+export interface PromptBeat {
+  lucBatDau: CauTag[];
+  /** Câu hành động tiếng Anh theo mã shot */
+  shots: Record<string, string>;
+  ambient: string;
+  music: string;
+  /** Theo vị trí câu thoại của beat */
+  thoai: ThoaiDich[];
+  /** 2–3 điều riêng của beat cần giữ đúng, tiếng Anh */
+  giuDung: string[];
+}
+
+export interface PromptCanh {
+  beats: Record<string, PromptBeat>;
+  /** Dấu chữ tiếng Việt nguồn lúc dịch — đổi → cảnh cần dịch lại */
+  dauVao: string;
+  updatedAt: number;
+}
+
+export interface PromptData {
+  canh: Record<string, PromptCanh>;
+  /** Frame cuối video của beat (id ảnh trong kho ảnh), dùng làm frame nối cho beat sau cùng cảnh */
+  frame: Record<string, string>;
+  /** Beat đã tạo video ở Flow */
+  daTao: Record<string, boolean>;
+}
+
 /* ============================ DỰ ÁN ============================ */
 
 /* ============================ MÀN ⑥ — BIBLE & THAM CHIẾU ============================ */
@@ -474,6 +518,7 @@ export interface Project {
     raSoat?: Section<RaSoatData>;
     bible?: Section<BibleData>;
     phanCanh?: Section<PhanCanhData>;
+    prompt?: Section<PromptData>;
   };
 }
 
