@@ -22,6 +22,11 @@ interface Props {
 type Tab = 'style' | 'nhanVat' | 'daoCu' | 'boiCanh' | 'anh';
 type Nhom = 'nhan-vat' | 'dao-cu' | 'boi-canh';
 const TEN_NHOM: Record<Nhom, string> = { 'nhan-vat': 'nhân vật', 'dao-cu': 'đạo cụ', 'boi-canh': 'bối cảnh và ánh sáng' };
+const VI_DU_SUA: Record<Nhom, string> = {
+  'nhan-vat': 'VD: Lan mặc áo khoác jeans thay vì áo len, giọng trầm hơn…',
+  'dao-cu': 'VD: thùng xốp nhỏ hơn, có dây nilon buộc quanh…',
+  'boi-canh': 'VD: phòng trọ chật hơn, có cửa sổ nhìn ra ngõ; ánh sáng khuya tối hơn…',
+};
 
 export default function BibleScreen({ project, onUpdate, onGo }: Props) {
   const { busy, error, notes, setNotes, run } = useRunner();
@@ -257,7 +262,7 @@ export default function BibleScreen({ project, onUpdate, onGo }: Props) {
           )}
           {tab === 'anh' && <AnhPanel projectId={project.id} muc={muc} anh={b.anh} onSet={(patch) => edit((x) => ({ ...x, anh: { ...x.anh, ...patch } }))} />}
 
-          {nhomOf[tab] && <ReviseBox onSubmit={(t) => viet(nhomOf[tab]!, t)} busy={busy === nhomOf[tab]} disabled={aiOff || noStyle} placeholder="VD: Lan mặc áo khoác jeans thay vì áo len, giọng trầm hơn…" />}
+          {nhomOf[tab] && <ReviseBox onSubmit={(t) => viet(nhomOf[tab]!, t)} busy={busy === nhomOf[tab]} disabled={aiOff || noStyle} placeholder={VI_DU_SUA[nhomOf[tab]!]} />}
           {issuesOf(tab) && <Issues errors={issuesOf(tab)!.errors} warnings={issuesOf(tab)!.warnings} />}
 
           {full.warnings.some((w) => w.includes('chưa có ảnh')) && tab !== 'anh' && (

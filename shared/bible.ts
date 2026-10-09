@@ -13,7 +13,10 @@ export const LOCATION_SUFFIX = 'empty scene with no people, no text, no letters,
 
 /** Nối các câu: bỏ dấu chấm cuối từng phần, nối bằng ". ", kết bằng dấu chấm. */
 export function noiCau(...parts: string[]): string {
-  const out = parts.map((p) => String(p || '').trim().replace(/[.\s]+$/, '')).filter(Boolean);
+  const out = parts
+    .map((p) => String(p || '').trim().replace(/[.\s]+$/, ''))
+    .filter(Boolean)
+    .map((p) => p.charAt(0).toUpperCase() + p.slice(1));
   return out.length ? `${out.join('. ')}.` : '';
 }
 
