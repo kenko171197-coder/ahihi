@@ -1,4 +1,4 @@
-# Lượt 4 — Màn ⑧ Prompt · Frame nối · Xuất file (BẢN NHÁP, chờ người dùng duyệt)
+# Lượt 4 — Màn ⑧ Prompt · Frame nối · Xuất file (ĐÃ DUYỆT 2026-10-09)
 
 Màn ⑧ ghép **một prompt video tiếng Anh cho mỗi beat** (một beat = một lần tạo trên Omni Flash). Đọc phân cảnh đã duyệt (⑦), bible đã duyệt (⑥) và ảnh tham chiếu.
 Nguyên tắc: **code ghép mọi phần cố định**; AI chỉ **dịch** phần tiếng Việt (trạng thái đầu beat, mô tả shot, âm thanh, cách nói) và chọn 2–3 điều cần giữ đúng.
@@ -17,7 +17,7 @@ Nguyên tắc: **code ghép mọi phần cố định**; AI chỉ **dịch** ph�
 - **Câu thoại giữ nguyên ngôn ngữ nói** (ngôn ngữ thoại ở brief), code chép nguyên văn, không dịch. AI chỉ dịch cách nói ("khẽ" → "softly").
 - **Giọng** chép từ bible: `@lan (young woman, soft husky voice, Northern accent) says softly in Vietnamese: "…"`.
 - Brief chọn "không nhạc nền" → `Music: none.` (code ghi, AI không thêm nhạc).
-- Mô tả ngoại hình nhân vật **không** chép vào prompt: ảnh tham chiếu lo ngoại hình, prompt giữ 150–220 từ. *(Câu hỏi 1 cho người dùng.)*
+- Mô tả ngoại hình nhân vật **không** chép vào prompt: ảnh tham chiếu lo ngoại hình, prompt giữ 150–220 từ. *(Người dùng đã chốt: không chép.)*
 
 ## 2. Tác vụ `prompt-canh` (một lần mỗi cảnh; "Tạo tất cả" chạy lần lượt)
 
@@ -65,7 +65,7 @@ Gọi theo cảnh (không theo beat) để các beat cùng cảnh dịch thống
 | Kịch bản (.txt) | Đọc như kịch bản: tiêu đề cảnh, beat có giây, hành động, thoại |
 | Sao lưu dự án (.json) | Đã có sẵn |
 
-*(Câu hỏi 2 cho người dùng: định dạng file xuất.)*
+*(Người dùng đã chốt: .txt.)*
 
 ## 7. Việc kèm theo
 

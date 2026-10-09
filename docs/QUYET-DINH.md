@@ -53,11 +53,14 @@ Cập nhật: 2026-10-09. Mọi thiết kế và code sau này phải khớp v�
 |---|---|---|
 | ① Ảnh tham chiếu | "Using the provided images: @a as …" — mỗi ảnh một vai trò | Code |
 | ② Không gian | Style + bối cảnh + ánh sáng của cảnh, giống từng chữ ở mọi beat cùng cảnh | Code chép bible |
-| ③ Lúc bắt đầu | Ai ở đâu, đồ vật trạng thái gì | Code từ trạng thái đầu beat |
+| ③ Lúc bắt đầu | Ai ở đâu, đồ vật trạng thái gì | Code lấy trạng thái đầu beat, AI dịch sang tiếng Anh |
 | ④ Các shot | `[00:00–00:03]` + câu máy + hành động; "Hard cut to" giữa các shot | Code (mốc giây, máy) + AI (dịch hành động) |
 | ⑤ Âm thanh | Ambient / Music / Dialogue (kèm giọng nhân vật chép từ bible) | Code ghép, AI dịch |
-| ⑥ Giữ đúng | Số shot, 2–3 điều riêng của beat, không phụ đề | Code |
+| ⑥ Giữ đúng | Số shot, 2–3 điều riêng của beat, không phụ đề | Code (số shot, không phụ đề) + AI chọn 2–3 điều |
 
+- Mô tả ngoại hình nhân vật **không** chép vào prompt video (ảnh tham chiếu lo ngoại hình). Câu thoại giữ nguyên ngôn ngữ nói, code chép nguyên văn.
+- Frame nối chỉ dùng cho beat kế tiếp **trong cùng cảnh**, tag `@noitiep`.
+- Xuất file: prompt và kịch bản dạng **.txt**. Chi tiết: `docs/LUOT-4.md`.
 - Beat một shot: thêm "in a single continuous shot with no scene cuts" (Omni tự cắt nếu không dặn).
 - Mục tiêu độ dài: khoảng 150–220 từ cho beat 2 shot.
 - Code tự kiểm trước khi xuất: tag nạp và tag trong prompt khớp nhau; tổng giây khớp; phần ② giống các beat cùng cảnh; câu hành động không tả lại bối cảnh hay ánh sáng.
