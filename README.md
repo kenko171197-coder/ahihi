@@ -1,4 +1,4 @@
-# Xưởng phim AI — lượt 1
+# Xưởng phim AI — lượt 2
 
 Đi từ ý tưởng tới prompt video cho Gemini Omni Flash, qua 3 giai đoạn, 8 màn. Mọi quyết định thiết kế: `docs/QUYET-DINH.md`.
 
@@ -16,14 +16,22 @@
 - **Màn ⑥** tạm dùng bước Nhân vật & đạo cụ cũ (làm lại ở lượt 3).
 - **Nhật ký AI** ở tab Cài đặt: xem prompt đã gửi, kết quả, lỗi.
 
-Màn ④ ⑤ ⑦ ⑧: lượt 2–4.
+## Đã làm ở lượt 2
+
+- **Màn ④ Kịch bản**, hai bước:
+  - **A. Dàn ý cảnh:** AI chia phim thành cảnh (địa điểm + tag, thời điểm, ánh sáng, chuyển biến, ai có mặt, số giây, trạng thái đầu / cuối cảnh, Cài – Dùng theo cảnh). Bạn sửa tay, thêm / xoá / đổi chỗ cảnh, rồi duyệt dàn ý.
+  - **B. Viết beat từng cảnh:** mỗi cảnh một lần gọi AI; nút "Viết tất cả" chạy lần lượt và dừng ở cảnh còn lỗi. Mỗi beat 3–10 giây (một lần tạo video). Đọc như kịch bản; sửa tay, thêm / xoá / tách beat. Trạng thái đầu beat do app tự lấy từ cuối beat trước. Cảnh có dàn ý hoặc cảnh trước đổi thì hiện "cần xem lại".
+- **Màn ⑤ Rà soát:** AI chấm theo thang của thể loại (app tự cộng điểm) và nêu vấn đề. Bạn nhận / bỏ qua (có ghi lý do) từng đề xuất. Đề xuất được nhận → AI viết lại đúng cảnh đó → bạn xem bản sửa cạnh bản cũ → nhận thì ghi thẳng vào màn ④ (màn ④ tự duyệt lại nếu không còn lỗi). Duyệt được khi không còn vấn đề mức "cao" chưa xử lý.
+- Màn ⑥ ⑦ giờ dựa trên kịch bản đã qua ⑤.
+
+Màn ⑥ ⑦ ⑧: lượt 3–4.
 
 ## Cấu trúc
 
 | Thư mục | Nội dung |
 |---|---|
 | `prompts/` | Mỗi tác vụ AI một file khung prompt. Sửa file là có hiệu lực ngay ở lần gọi sau |
-| `knowledge/the-loai/` | Mỗi thể loại một file. Dòng `- **Các phần:** …` là các phần bắt buộc của treatment |
+| `knowledge/the-loai/` | Mỗi thể loại một file. Dòng `- **Các phần:** …` là các phần bắt buộc của treatment; `- **Độ dài beat:** 4–8 giây` là khoảng giây khuyên cho mỗi beat; bảng "Chấm nhanh" ở mục Rà soát là thang chấm của màn ⑤ |
 | `shared/` | Mô hình dữ liệu và code kiểm, dùng chung cho server và giao diện |
 | `server/tasks/` | Khung tác vụ AI (`framework.ts`), từng tác vụ (`defs/`), danh sách tác vụ (`registry.ts`) |
 | `src/components/screens/` | Các màn |
