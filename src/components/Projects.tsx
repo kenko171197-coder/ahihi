@@ -7,6 +7,8 @@ import { ProjectUsageBadge } from './UsagePanel';
 import BriefScreen from './screens/BriefScreen';
 import NhanVatScreen from './screens/NhanVatScreen';
 import TreatmentScreen from './screens/TreatmentScreen';
+import KichBanScreen from './screens/KichBanScreen';
+import RaSoatScreen from './screens/RaSoatScreen';
 import LegacyDesignScreen from './screens/LegacyDesignScreen';
 import PlaceholderStep from './steps/PlaceholderStep';
 
@@ -23,8 +25,6 @@ const STAGE_NAMES: Record<number, string> = { 1: 'Phát triển', 2: 'Tiền k�
 
 /** Màn đã làm ở lượt nào (màn chưa làm hiện trang giữ chỗ). */
 const PLANNED: Partial<Record<SectionKey, { title: string; items: string[] }>> = {
-  kichBan: { title: 'Kịch bản', items: ['Dàn ý cảnh (cảnh = các beat cùng bối cảnh) — bạn duyệt trước', 'Viết beat cho từng cảnh: hành động, thoại, âm thanh, số giây (3–10 giây mỗi beat)', 'Ai và vật gì có mặt, trạng thái đầu – cuối beat, thay đổi trạng thái'] },
-  raSoat: { title: 'Rà soát', items: ['AI chấm kịch bản theo file thể loại', 'Danh sách vấn đề và đề xuất sửa, bạn nhận hoặc bỏ từng mục', 'Đề xuất được áp thẳng vào kịch bản'] },
   phanCanh: { title: 'Phân cảnh', items: ['Mỗi beat chia thành shot: cỡ cảnh, góc máy, chuyển động, số giây', 'Ô Mô tả tiếng Việt cho từng shot', 'Khung bàn giao để chụp frame nối'] },
   prompt: { title: 'Prompt', items: ['Prompt video cho từng beat theo khung 6 phần', 'Code chép phần cố định từ bible, AI chỉ dịch hành động', 'Frame nối và code tự kiểm trước khi xuất'] },
 };
@@ -120,6 +120,8 @@ function Workspace({ project, onUpdate, onDelete, onBack }: { project: Project; 
       {current.key === 'brief' && <BriefScreen project={project} onUpdate={onUpdate} onGo={goTo} />}
       {current.key === 'nhanVat' && <NhanVatScreen project={project} onUpdate={onUpdate} onGo={goTo} />}
       {current.key === 'treatment' && <TreatmentScreen project={project} onUpdate={onUpdate} onGo={goTo} />}
+      {current.key === 'kichBan' && <KichBanScreen project={project} onUpdate={onUpdate} onGo={goTo} />}
+      {current.key === 'raSoat' && <RaSoatScreen project={project} onUpdate={onUpdate} onGo={goTo} />}
       {current.key === 'bible' && <LegacyDesignScreen project={project} onUpdate={onUpdate} onNext={next} />}
       {PLANNED[current.key] && <PlaceholderStep title={`${current.no}. ${PLANNED[current.key]!.title}`} items={PLANNED[current.key]!.items} />}
 

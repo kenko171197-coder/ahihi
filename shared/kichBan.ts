@@ -1,6 +1,6 @@
 // Tiện ích cho kịch bản (màn ④ ⑤) — dùng chung cho server và giao diện. Thuần, không thư viện ngoài.
 // Mã cảnh / beat, trạng thái đầu beat, cờ "cần xem lại" theo cảnh, đạo cụ đã khai.
-import type { Beat, CanhDanY, CanhViet, DanY, DaoCu, DongTrangThai, KichBanData } from './project';
+import type { Beat, CanhDanY, CanhViet, DanY, DaoCu, DongTrangThai, KichBanData, ThayDoi, ThoaiCau } from './project';
 import { toTag } from './project';
 
 /* ---------- Mã cố định ---------- */
@@ -37,6 +37,34 @@ export function parseTrangThai(text: string): DongTrangThai[] {
     .filter((m): m is RegExpExecArray => !!m)
     .map((m) => ({ tag: toTag(m[1]), moTa: m[2].trim() }))
     .filter((l) => l.tag);
+}
+
+/** Ô chữ danh sách tag: "@lan, @thungxop" → ["lan", "thungxop"]. */
+export const parseTags = (text: string) => Array.from(new Set(String(text || '').split(/[\s,;]+/).map(toTag).filter(Boolean)));
+
+/** "@thungxop: đóng → mở", mỗi dòng một thay đổi. */
+export const thayDoiText = (list: ThayDoi[]) => list.map((x) => `@${x.tag}: ${x.truoc} → ${x.sau}`).join('\n');
+
+export function parseThayDoi(text: string): ThayDoi[] {
+  return parseTrangThai(text).map((l) => {
+    const [truoc, ...rest] = l.moTa.split(/\s*(?:→|->)\s*/);
+    return { tag: l.tag, truoc: (truoc || '').trim(), sau: rest.join(' → ').trim() };
+  });
+}
+
+/** Thoại, mỗi dòng một câu: "@lan (khẽ): câu nói" — người không có ở màn ② ghi tên không có @. */
+export const thoaiText = (list: ThoaiCau[], charTags: Set<string>) =>
+  list.map((t) => `${charTags.has(t.ai) ? '@' : ''}${t.ai}${t.cachNoi ? ` (${t.cachNoi})` : ''}: ${t.cau}`).join('\n');
+
+export function parseThoai(text: string, charTags: Set<string>): ThoaiCau[] {
+  return String(text || '')
+    .split('\n')
+    .map((line) => /^\s*(@?[^():]+?)\s*(?:\(([^)]*)\))?\s*:\s*(.+)$/.exec(line))
+    .filter((m): m is RegExpExecArray => !!m)
+    .map((m) => {
+      const who = m[1].replace(/^@/, '').trim();
+      return { ai: charTags.has(toTag(who)) ? toTag(who) : who, cachNoi: (m[2] || '').trim(), cau: m[3].trim() };
+    });
 }
 
 /** Khoảng giây từ chữ "4–8 giây" → [4, 8]. */
