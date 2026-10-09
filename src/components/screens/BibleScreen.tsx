@@ -8,6 +8,7 @@ import { bocTach, emptyBible, mucAnh, khoaAnhSang } from '../../../shared/bible'
 import { checkBible, checkBibleNhanVat, checkBibleDaoCu, checkBibleBoiCanh, checkStyle, tagNgoaiBoDo } from '../../../shared/checks';
 import { runTask } from '../../services/api';
 import { askConfirm, notify } from '../../lib/dialog';
+import { deleteImage } from '../../lib/images';
 import { ErrorBox, RunButton } from '../ui';
 import { ScreenIntro, StatusBar, Issues, ReviseBox, useRunner, LockedScreen, UpstreamBanner } from './common';
 import { StylePanel, NhanVatPanel, DaoCuPanel, BoiCanhPanel } from './bible/MucPanels';
@@ -67,15 +68,22 @@ export default function BibleScreen({ project, onUpdate, onGo }: Props) {
   const doiTag = (oldTag: string, newTag: string): boolean => {
     const x = latestRef.current.sections.bible?.data;
     if (!x) return false;
+    const owner = x.nhanVat.find((n) => n.bo.some((bo) => bo.tag === oldTag));
+    // Trả lại tag chính của nhân vật cho một bộ đồ khi chưa bộ nào của nhân vật đó mang nó
+    const veTagChinh = !!owner && newTag === owner.tag && !owner.bo.some((bo) => bo.tag === owner.tag);
     const taken = new Set([...tagNgoaiBoDo(x, nhanVat), ...x.nhanVat.flatMap((n) => n.bo.map((y) => y.tag)), ...Object.keys(x.anh).filter((k) => x.anh[k]?.imageId)]);
     taken.delete(oldTag);
-    if (!/^[a-z0-9]{1,15}$/.test(newTag) || taken.has(newTag)) {
+    if (!/^[a-z0-9]{1,15}$/.test(newTag) || (taken.has(newTag) && !veTagChinh)) {
       notify(`Không đổi được sang @${newTag || '(trống)'}: tag phải viết liền, không dấu, tối đa 15 ký tự và không trùng tag khác (kể cả tag đã có ảnh).`, 'Tag không hợp lệ');
       return false;
     }
+    const anhCu = x.anh[newTag]?.imageId;
+    if (veTagChinh && anhCu && !x.anh[oldTag]?.imageId) notify(`@${newTag} đang có ảnh cũ — ảnh đó sẽ gắn vào bộ này. Kiểm tra lại ở tab Ảnh tham chiếu, thay nếu không đúng.`, 'Kiểm tra ảnh');
     edit((y) => {
       const anh = { ...y.anh };
-      if (anh[oldTag]) {
+      if (anh[oldTag]?.imageId) {
+        // Ảnh của bộ này đi theo bộ; ảnh cũ đang nằm ở tag mới (nếu có) không còn ai dùng → xoá
+        if (anh[newTag]?.imageId && anh[newTag].imageId !== anh[oldTag].imageId) deleteImage(anh[newTag].imageId!).catch(() => undefined);
         anh[newTag] = anh[oldTag];
         delete anh[oldTag];
       }

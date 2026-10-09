@@ -21,6 +21,8 @@ interface Pending {
   preview: string;
   match: ImageMatch | null;
   tag: string;
+  /** Quét lỗi: chọn tag bằng tay (không có gì AI thấy để lưu) */
+  chuaQuet?: boolean;
 }
 
 function TagCard({ m, anh, onReplace, onRemove, onError }: { m: MucAnh; anh?: AnhThamChieu; onReplace: (f: File) => void; onRemove: () => void; onError: (msg: string) => void }) {
@@ -145,7 +147,7 @@ export default function AnhPanel({ projectId, muc, anh, onSet }: Props) {
     } catch (e: any) {
       setError(`${e.message} — ảnh chưa quét được thì chọn tag bằng tay.`);
       // Ảnh chưa quét được vẫn chọn tag bằng tay được
-      setPending((list) => list.map((p) => (p.match ? p : { ...p, match: { index: -1, tag: '', confidence: 0, seen: '', warning: 'Chưa quét được — chọn tag bằng tay.' } })));
+      setPending((list) => list.map((p) => (p.match ? p : { ...p, chuaQuet: true, match: { index: -1, tag: '', confidence: 0, seen: '', warning: '' } })));
     } finally {
       setBusy('');
     }
@@ -274,6 +276,7 @@ export default function AnhPanel({ projectId, muc, anh, onSet }: Props) {
                     )}
                     {p.match.seen && <p className="text-xs text-gray-300">{p.match.seen}</p>}
                     {p.match.warning && <p className="text-xs text-red-300">⚠ {p.match.warning}</p>}
+                    {p.chuaQuet && <p className="text-xs text-gray-400">Chưa quét được — chọn tag bằng tay.</p>}
                   </>
                 ) : (
                   <p className="text-xs text-gray-400">Đang quét…</p>

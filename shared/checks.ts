@@ -448,7 +448,7 @@ export function checkBibleNhanVat(list: BibleNhanVat[], ctx: BibleCtx, tagKhac: 
       return;
     }
     if (!n.bo.length) errors.push(`${n.ten} có mặt trong phim nhưng chưa có bộ đồ nào.`);
-    else if (n.bo.filter((bo) => bo.tag === n.tag).length !== 1) errors.push(`${n.ten}: đúng một bộ đồ phải mang tag @${n.tag}.`);
+    else if (n.bo.filter((bo) => bo.tag === n.tag).length !== 1) errors.push(`${n.ten}: đúng một bộ đồ phải mang tag @${n.tag} — đổi tag một bộ sang @${n.tag} ở ô "Tag ảnh".`);
     if (n.bo.length > 4) warnings.push(`${n.ten} có ${n.bo.length} bộ đồ — nhiều bộ thì khó giữ nhân vật đồng nhất.`);
     n.bo.forEach((bo, i) => {
       const L = `${n.ten} — bộ "${bo.ten || i + 1}"`;

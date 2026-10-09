@@ -143,7 +143,7 @@ export function NhanVatPanel({
                       <TagInput id={`bo-${n.tag}-${i}`} value={bo.tag} disabled={bo.tag === n.tag} onCommit={(t) => onDoiTag(bo.tag, t)} />
                     </div>
                   </div>
-                  {n.bo.length > 1 && (
+                  {n.bo.length > 1 && bo.tag !== n.tag && (
                     <button onClick={() => xoaBo(i)} aria-label={`Xoá bộ đồ ${bo.ten}`} title="Xoá bộ đồ (cảnh của bộ này về bộ đầu)" className="p-2.5 rounded-xl text-gray-400 hover:text-red-600 hover:bg-red-50">
                       <Trash2 className="w-4 h-4" />
                     </button>
