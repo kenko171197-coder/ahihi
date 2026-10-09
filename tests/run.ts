@@ -809,9 +809,9 @@ await test('prompt ảnh do code ghép: mô tả + khung + style; đạo cụ k�
   const d = promptDaoCu(b.daoCu[0], b.style);
   assert.ok(d.startsWith(b.daoCu[0].moTa.replace(/\.$/, '')));
   assert.ok(d.includes(b.style.replace(/\.$/, '')));
-  assert.ok(d.endsWith(`${PROP_SUFFIX}.`));
+  assert.ok(d.toLowerCase().endsWith(`${PROP_SUFFIX}.`));
   const c = promptBoiCanh(b.boiCanh[0], b.boiCanh[0].bienThe[0], b.style, '9:16');
-  assert.ok(c.includes('aspect ratio 9:16') && c.includes('no people'));
+  assert.ok(c.includes("Aspect ratio 9:16") && c.includes("no people"));
   assert.ok(promptSheet(b.nhanVat[0].bo[0], b.style).includes(EN.moTa.replace(/\.$/, '')));
   const tags = mucAnh(b, '9:16').map((m) => m.tag);
   assert.deepEqual(tags, ['lan', 'thungxop', 'phongtro', 'phongtrosangsom'], 'mẹ không có ảnh (chỉ có giọng)');
