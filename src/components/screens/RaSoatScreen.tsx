@@ -112,7 +112,7 @@ function IssueCard({
 }
 
 export default function RaSoatScreen({ project, onUpdate, onGo }: Props) {
-  const { busy, error, setError, notes, run } = useRunner();
+  const { busy, error, notes, run } = useRunner();
   const [genres, setGenres] = useState<GenreInfo[] | null>(null);
   useEffect(() => {
     getGenres().then(setGenres).catch(() => setGenres([]));

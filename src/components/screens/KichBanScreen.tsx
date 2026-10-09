@@ -33,7 +33,7 @@ function relayout(canh: CanhDanY[]): CanhDanY[] {
 }
 
 export default function KichBanScreen({ project, onUpdate, onGo }: Props) {
-  const { busy, error, setError, notes, run } = useRunner();
+  const { busy, error, notes, run } = useRunner();
   const [genres, setGenres] = useState<GenreInfo[] | null>(null);
   const [genreError, setGenreError] = useState('');
   const loadGenres = () => {
