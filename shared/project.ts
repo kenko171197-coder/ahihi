@@ -1,0 +1,327 @@
+// Mô hình dữ liệu dự án — dùng chung cho server và giao diện. Không import thư viện ngoài (để test chạy được).
+// Khớp docs/QUYET-DINH.md mục 2–3: 8 màn, mỗi phần có trạng thái nháp / đã duyệt, rev, basedOn, cờ "đã cũ".
+
+/* ============================ CÁC PHẦN CỦA DỰ ÁN ============================ */
+
+/** Khoá của từng phần (mỗi màn sở hữu một phần). */
+export type SectionKey = 'brief' | 'nhanVat' | 'treatment' | 'kichBan' | 'raSoat' | 'bible' | 'phanCanh' | 'prompt';
+
+/** Phần nào dựa trên phần nào. Sửa phần trên → phần dưới "đã cũ". */
+export const DEPS: Record<SectionKey, SectionKey[]> = {
+  brief: [],
+  nhanVat: ['brief'],
+  treatment: ['brief', 'nhanVat'],
+  kichBan: ['brief', 'nhanVat', 'treatment'],
+  raSoat: ['kichBan'],
+  bible: ['brief', 'nhanVat', 'kichBan'],
+  phanCanh: ['kichBan', 'bible'],
+  prompt: ['phanCanh', 'bible'],
+};
+
+/** 8 màn theo thứ tự. */
+export const SCREENS: { key: SectionKey; no: number; label: string; stage: 1 | 2 | 3 }[] = [
+  { key: 'brief', no: 1, label: 'Ý tưởng & định hướng', stage: 1 },
+  { key: 'nhanVat', no: 2, label: 'Nhân vật', stage: 1 },
+  { key: 'treatment', no: 3, label: 'Treatment', stage: 1 },
+  { key: 'kichBan', no: 4, label: 'Kịch bản', stage: 1 },
+  { key: 'raSoat', no: 5, label: 'Rà soát', stage: 1 },
+  { key: 'bible', no: 6, label: 'Bible & tham chiếu', stage: 2 },
+  { key: 'phanCanh', no: 7, label: 'Phân cảnh', stage: 2 },
+  { key: 'prompt', no: 8, label: 'Prompt', stage: 3 },
+];
+
+export type Status = 'nhap' | 'duyet';
+
+export interface Meta {
+  /** Tăng mỗi lần duyệt một nội dung mới */
+  rev: number;
+  status: Status;
+  /** rev của các phần phía trên lúc phần này được tạo / duyệt */
+  basedOn: Partial<Record<SectionKey, number>>;
+  updatedAt: number;
+}
+
+export interface Section<T> {
+  data: T;
+  meta: Meta;
+}
+
+/* ============================ MÀN ① — BRIEF ============================ */
+
+export type NenTang = 'doc' | 'ngang';
+export type HinhThuc = 'nguoi-that' | 'hoat-hinh-3d' | 'hoat-hinh-2d';
+export type MucThoai = 'khong' | 'it' | 'nhieu';
+export type NhacNen = 'khong' | 'co' | 'ai-de-xuat';
+
+/** Những gì người dùng nhập ở màn ①. */
+export interface BriefInput {
+  yTuong: string;
+  theLoai: string; // id file thể loại
+  nenTang: NenTang;
+  thoiLuongGiay: number;
+  hinhThuc: HinhThuc;
+  thoai: { mucDo: MucThoai; ngonNgu: string };
+  nhacNen: NhacNen;
+  ghiChu: string;
+}
+
+export interface HoiLaiCau {
+  id: string;
+  cauHoi: string;
+  luaChon: string[];
+  traLoi: string;
+}
+
+export interface LoglineOption {
+  logline: string;
+  thongDiep: string;
+  camXuc: string;
+  khanGia: string;
+  viSaoHop: string;
+}
+
+/** Brief đã duyệt — phần các màn sau đọc. */
+export interface Brief extends BriefInput {
+  tiLe: '9:16' | '16:9';
+  logline: string;
+  thongDiep: string;
+  camXuc: string;
+  khanGia: string;
+}
+
+/** Trạng thái làm việc của màn ① (chưa phải brief đã duyệt). */
+export interface BriefWork {
+  input: BriefInput;
+  cauHoi: HoiLaiCau[];
+  nhanXet: string;
+  phuongAn: LoglineOption[];
+  chon: number; // -1 = chưa chọn
+}
+
+/* ============================ MÀN ② — NHÂN VẬT ============================ */
+
+export type VaiNhanVat = 'chinh' | 'phu' | 'gian-tiep';
+
+export interface Character {
+  id: string;
+  ten: string;
+  tag: string;
+  vai: VaiNhanVat;
+  tuoi: string;
+  muon: string;
+  can: string;
+  tinhCach: string;
+  chiTiet: string;
+  quanHe: string;
+  ghiChuThietKe: string;
+}
+
+export interface NhanVatData {
+  list: Character[];
+}
+
+/* ============================ MÀN ③ — TREATMENT ============================ */
+
+export interface PhanDoan {
+  id: string;
+  ten: string;
+  mucTieu: string;
+  batDau: number;
+  ketThuc: number;
+  tomTat: string;
+}
+
+export interface PhanTruyen {
+  id: string;
+  ten: string;
+  vaiTro: string;
+  batDau: number;
+  ketThuc: number;
+  tomTat: string;
+  mocTruyen: string[];
+  phanDoan: PhanDoan[];
+}
+
+export interface CaiDung {
+  id: string;
+  chiTiet: string;
+  /** id phần cài */
+  cai: string;
+  /** id phần dùng */
+  dung: string;
+}
+
+export interface TreatmentData {
+  phan: PhanTruyen[];
+  caiDung: CaiDung[];
+}
+
+/** Từ bao nhiêu giây thì mỗi phần phải chia thành phân đoạn. */
+export const PHAN_DOAN_TU_GIAY = 180;
+
+/* ============================ DỰ ÁN ============================ */
+
+/** Dữ liệu tạm của bước Nhân vật & đạo cụ cũ — dùng tạm ở màn ⑥ cho tới lượt 3. */
+export interface ThietKeTam {
+  synopsis: string;
+  style: string;
+  characterSeeds: { name: string; brief: string }[];
+  propSeeds: { name: string; brief: string }[];
+  design?: { characters: any[]; props: any[] };
+  assets?: { tag: string; kind: 'character' | 'prop'; note: string; imageId?: string; seen?: string; warning?: string }[];
+}
+
+export interface Project {
+  id: string;
+  version: 3;
+  title: string;
+  createdAt: number;
+  updatedAt: number;
+  /** Màn đang mở */
+  manHinh: SectionKey;
+  briefWork: BriefWork;
+  sections: {
+    brief?: Section<Brief>;
+    nhanVat?: Section<NhanVatData>;
+    treatment?: Section<TreatmentData>;
+  };
+  thietKeTam: ThietKeTam;
+}
+
+export type ProjectPatch = Partial<Project> | ((latest: Project) => Partial<Project>);
+
+/* ============================ HÀM TIỆN ÍCH (thuần) ============================ */
+
+export const tiLeCua = (n: NenTang): '9:16' | '16:9' => (n === 'doc' ? '9:16' : '16:9');
+
+export const DEFAULT_BRIEF_INPUT: BriefInput = {
+  yTuong: '',
+  theLoai: '',
+  nenTang: 'doc',
+  thoiLuongGiay: 60,
+  hinhThuc: 'nguoi-that',
+  thoai: { mucDo: 'it', ngonNgu: 'tiếng Việt' },
+  nhacNen: 'ai-de-xuat',
+  ghiChu: '',
+};
+
+export function newProjectData(id: string, now: number, title = 'Dự án mới'): Project {
+  return {
+    id,
+    version: 3,
+    title,
+    createdAt: now,
+    updatedAt: now,
+    manHinh: 'brief',
+    briefWork: { input: { ...DEFAULT_BRIEF_INPUT, thoai: { ...DEFAULT_BRIEF_INPUT.thoai } }, cauHoi: [], nhanXet: '', phuongAn: [], chon: -1 },
+    sections: {},
+    thietKeTam: { synopsis: '', style: '', characterSeeds: [], propSeeds: [] },
+  };
+}
+
+/** Lấy phần của dự án (các màn chưa làm trả về undefined). */
+export function getSection(p: Project, key: SectionKey): Section<any> | undefined {
+  return (p.sections as Record<string, Section<any> | undefined>)[key];
+}
+
+/** rev hiện tại của các phụ thuộc. */
+export function depRevs(p: Project, key: SectionKey): Partial<Record<SectionKey, number>> {
+  const out: Partial<Record<SectionKey, number>> = {};
+  DEPS[key].forEach((d) => {
+    const s = getSection(p, d);
+    if (s) out[d] = s.meta.rev;
+  });
+  return out;
+}
+
+/** Phụ thuộc CHƯA TỪNG được duyệt → màn bị khoá hẳn (chưa có gì để làm). */
+export function missingDeps(p: Project, key: SectionKey): SectionKey[] {
+  return DEPS[key].filter((d) => {
+    const s = getSection(p, d);
+    return !s || (s.meta.rev === 0 && s.meta.status !== 'duyet');
+  });
+}
+
+/** Phụ thuộc đang nháp hoặc đã cũ → màn vẫn xem được, nhưng chưa được tạo / duyệt / giữ nguyên.
+ *  Tính lan theo chuỗi: ② đã cũ thì ③ cũng bị chặn. */
+export function blockedDeps(p: Project, key: SectionKey): SectionKey[] {
+  return DEPS[key].filter((d) => {
+    const s = getSection(p, d);
+    return !s || s.meta.status !== 'duyet' || isStale(p, d);
+  });
+}
+
+/** Phần phía trên nào đã đổi sau khi phần này được tạo / duyệt. */
+export function staleDeps(p: Project, key: SectionKey): SectionKey[] {
+  const s = getSection(p, key);
+  if (!s) return [];
+  return DEPS[key].filter((d) => {
+    const dep = getSection(p, d);
+    if (!dep) return false;
+    const seen = s.meta.basedOn[d];
+    return seen === undefined || dep.meta.rev !== seen || dep.meta.status !== 'duyet';
+  });
+}
+
+export function isStale(p: Project, key: SectionKey): boolean {
+  return staleDeps(p, key).length > 0;
+}
+
+/** Tạo phần mới từ kết quả AI (trạng thái nháp).
+ *  basedOn: phiên bản các phần phía trên mà AI đã ĐỌC — chụp lúc bấm nút, để nếu phần trên đổi trong lúc AI chạy
+ *  thì kết quả được đánh dấu "đã cũ". Không truyền thì lấy phiên bản hiện tại. */
+export function freshSection<T>(p: Project, key: SectionKey, data: T, now: number, basedOn?: Partial<Record<SectionKey, number>>): Section<T> {
+  const old = getSection(p, key);
+  return { data, meta: { rev: old?.meta.rev ?? 0, status: 'nhap', basedOn: basedOn ?? depRevs(p, key), updatedAt: now } };
+}
+
+/** Sửa tay dữ liệu: về nháp, giữ basedOn (vẫn dựa trên cùng phần phía trên). */
+export function editSection<T>(s: Section<T>, data: T, now: number): Section<T> {
+  return { data, meta: { ...s.meta, status: 'nhap', updatedAt: now } };
+}
+
+/** Duyệt: rev + 1, ghi lại phụ thuộc hiện tại. */
+export function approveSection<T>(p: Project, key: SectionKey, s: Section<T>, now: number): Section<T> {
+  return { data: s.data, meta: { rev: s.meta.rev + 1, status: 'duyet', basedOn: depRevs(p, key), updatedAt: now } };
+}
+
+/** "Giữ nguyên": phần phía trên đổi nhưng người dùng xác nhận phần này vẫn đúng → duyệt lại với phụ thuộc mới. */
+export const keepSection = approveSection;
+
+/* ============================ TAG ============================ */
+
+/** "Chó Cái" → "chocai": viết liền, không dấu, chữ thường, tối đa 15 ký tự. */
+export function toTag(input: string): string {
+  return String(input || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[đĐ]/g, 'd')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '')
+    .slice(0, 15);
+}
+
+/** Tag không trùng: thêm số ở cuối nếu đã có. */
+export function uniqueTag(base: string, taken: Set<string>): string {
+  const b = toTag(base) || 'nv';
+  if (!taken.has(b)) return b;
+  for (let i = 2; i < 100; i++) {
+    const t = `${b.slice(0, 15 - String(i).length)}${i}`;
+    if (!taken.has(t)) return t;
+  }
+  return `${b.slice(0, 11)}${Date.now() % 10000}`;
+}
+
+/** Định dạng giây: 75 → "1:15". */
+export function fmtGiay(s: number): string {
+  if (!Number.isFinite(s)) return '—';
+  const n = Math.max(0, Math.round(s));
+  return n >= 60 ? `${Math.floor(n / 60)}:${String(n % 60).padStart(2, '0')}` : `${n}s`;
+}
+
+/** Số nhân vật tối đa hợp lý theo thời lượng (chỉ để cảnh báo). */
+export function maxNhanVat(giay: number): number {
+  if (giay < 180) return 3;
+  if (giay <= 600) return 6;
+  return 8;
+}
