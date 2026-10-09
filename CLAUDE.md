@@ -7,7 +7,7 @@ Người dùng là nhà làm phim, không phải lập trình viên: **trả l�
 
 @docs/QUYET-DINH.md
 
-- Bản thiết kế lượt đang làm: `docs/LUOT-2.md` (đọc khi bắt đầu lượt 2).
+- Bản thiết kế lượt 2 (đã làm): `docs/LUOT-2.md`. Lượt 3: `docs/LUOT-3.md` (màn ⑥ và ⑦). Lượt 4: `docs/LUOT-4.md` (màn ⑧ Prompt, frame nối, xuất file).
 - Mọi thay đổi phải khớp `docs/QUYET-DINH.md`. Muốn làm khác quyết định đã chốt → hỏi người dùng trước, sửa file đó trước rồi mới code.
 
 ## Cách làm việc (bắt buộc)
@@ -24,6 +24,12 @@ Người dùng là nhà làm phim, không phải lập trình viên: **trả l�
 | Chỗ | Vai trò |
 |---|---|
 | `shared/project.ts` | Mô hình dữ liệu dự án: `SectionKey`, `DEPS` (phần nào dựa trên phần nào), `SCREENS`, trạng thái nháp/duyệt, `rev`, `basedOn`; hàm `freshSection / editSection / approveSection / keepSection / staleDeps / isStale / missingDeps / blockedDeps` |
+| `shared/kichBan.ts` | Kịch bản: mã cảnh / beat cố định (`ganMaBeat`), trạng thái theo dòng (`parseTrangThai`), trạng thái đầu beat (`dauBeat`), cờ "cần xem lại" theo cảnh (`dauVaoCanh`, `tinhTrangCanh`), đạo cụ đã khai (`daoCuTruoc`), ghi cảnh (`ghiCanh` = kết quả AI / "vẫn đúng", `suaCanh` = sửa tay) |
+| `shared/bible.ts` | Bible (màn ⑥): bóc tách từ kịch bản chốt (`bocTach`, giữ phần đã làm khi bóc lại), ghép prompt ảnh (`promptNhanVat / promptSheet / promptDaoCu / promptBoiCanh`), danh sách ảnh tham chiếu (`mucAnh`), ánh sáng cùng khoá dùng chung câu (`dongBoAnhSang`) |
+| `shared/phanCanh.ts` | Phân cảnh (màn ⑦): danh sách cỡ cảnh / góc máy / chuyển động kèm câu tiếng Anh (`cauMay`), mốc giây (`mocGiay`, bước 0,5), mã shot cố định (`ganMaShot`), cờ "cần xem lại" theo cảnh (`dauVaoPhanCanh`, `tinhTrangPhanCanh`) |
+| `shared/prompt.ts` | Prompt video (màn ⑧): ghép 6 phần (`ghepBeat`, `ghepCanh`), ảnh cần nạp (`anhCanNap`, tag nhân vật → tag bộ đồ của cảnh), frame nối (`@noitiep`, chỉ trong cùng cảnh), cờ "cần dịch lại" theo cảnh (`dauVaoPrompt`), khớp phần dịch (`khopDich`), code kiểm phần AI dịch (`checkPromptDich` — đặt ở đây, không ở checks.ts, để tránh import vòng) |
+| `shared/xuat.ts` | Xuất .txt: prompt mọi beat (`xuatPromptTxt`), kịch bản dạng đọc (`xuatKichBanTxt`) |
+| `server/anhThamChieu.ts` | Quét ảnh tham chiếu gán @tag (gọi AI kèm ảnh, route `/api/match-images`) |
 | `shared/checks.ts` | Code kiểm dùng chung cho server (kiểm kết quả AI) và giao diện (kiểm bản sửa tay) |
 | `server/tasks/framework.ts` | Khung chung mọi tác vụ AI: khuôn prompt → gọi AI với khuôn trả về → `normalize` → `check` → sai thì gửi lại kèm lỗi (tối đa 2 lần) → nhật ký |
 | `server/tasks/defs/*.ts` | Từng tác vụ (`TaskDef`): `parseInput`, `genreId`, `vars`, `schema`, `normalize`, `check`, `isEmpty` |
@@ -42,7 +48,8 @@ Người dùng là nhà làm phim, không phải lập trình viên: **trả l�
 - **Thêm tác vụ AI:** viết `TaskDef` trong `server/tasks/defs/`, thêm vào `registry.ts`, thêm file `prompts/`, thêm dòng vào `TASKS` và `FEATURE_NAMES`, viết test (gồm test "file prompt chỉ dùng biến tác vụ cung cấp" — đã có sẵn, tự chạy cho mọi tác vụ trong registry).
 - **Code kiểm** đặt ở `shared/checks.ts` để cả server lẫn giao diện dùng. Lỗi (`errors`) chặn duyệt và làm AI bị gửi lại; cảnh báo (`warnings`) chỉ báo.
 - **Ghi dữ liệu dự án** luôn qua `onUpdate((latest) => …)` (không dùng bản `project` cũ sau `await`).
-- **Kết quả AI** lưu bằng `freshSection(latest, key, data, now, readRevs)` với `readRevs = depRevs(project, key)` chụp **lúc bấm nút**; hỏi trước khi ghi đè nếu người dùng đã sửa trong lúc AI chạy (xem `NhanVatScreen.tsx`).
+- **Kết quả AI** lưu bằng `freshSection(latest, key, data, now, readRevs)` với `readRevs = depRevs(project, key)` chụp **lúc bấm nút**; hỏi trước khi ghi đè nếu người dùng đã sửa trong lúc AI chạy (xem `NhanVatScreen.tsx`). Ngoại lệ: AI ghi **một phần nhỏ** vào phần đã có (một cảnh ở ④, một nhóm ở ⑥) dùng `editSection` — `basedOn` giữ theo lần tạo dàn ý / bóc tách.
+- **Ảnh tham chiếu** (màn ⑥, `bible.anh`) ghi thẳng, không qua `editSection`: ảnh không làm màn ⑥ mất duyệt.
 - **Mã cố định:** id cảnh / beat / nhân vật không bao giờ đánh lại số khi chèn hoặc xoá.
 - **Màn sau chỉ đọc bản đã duyệt** của màn trước; nút tạo / duyệt bị chặn khi `blockedDeps` khác rỗng.
 - Thông tin cố định (style, mô tả nhân vật, ánh sáng cảnh) do **code chép nguyên văn** vào prompt, không để AI viết lại.
@@ -55,5 +62,8 @@ Người dùng là nhà làm phim, không phải lập trình viên: **trả l�
 ## Trạng thái
 
 - **Lượt 1 — xong:** nền móng + màn ① Ý tưởng & định hướng, ② Nhân vật, ③ Treatment. Màn ⑥ tạm dùng bước thiết kế cũ.
-- **Lượt 2 — tiếp theo:** màn ④ Kịch bản + ⑤ Rà soát. Bản nháp thiết kế: `docs/LUOT-2.md` (chưa được người dùng duyệt).
-- Lượt 3: ⑥ Bible & tham chiếu (bóc tách tự động, bối cảnh, ánh sáng theo cảnh, giọng) + ⑦ Phân cảnh. Lượt 4: ⑧ Prompt + frame nối + xuất file.
+- **Lượt 2 — xong:** màn ④ Kịch bản (dàn ý cảnh `dan-y-canh` + viết beat từng cảnh `viet-canh`) và ⑤ Rà soát (`ra-soat`, sửa đề xuất bằng `viet-canh` chế độ sửa, ghi thẳng vào ④). Màn ⑥ ⑦ dựa trên ⑤. Thiết kế: `docs/LUOT-2.md`.
+- **Lượt 3a — xong:** màn ⑥ Bible & tham chiếu mới (bóc tách, style cố định, `bible-style`, `bible-nhan-vat` gồm giọng + bộ đồ, `bible-dao-cu`, `bible-boi-canh` gồm ánh sáng từng cảnh, ảnh tham chiếu). Màn ⑥ tạm cũ đã gỡ. Thiết kế: `docs/LUOT-3.md`.
+- **Lượt 3b — xong:** màn ⑦ Phân cảnh (`phan-canh`, một lần mỗi cảnh; shot có số giây bước 0,5, máy chọn từ danh sách, ô Mô tả tiếng Việt, thoại theo shot).
+- **Lượt 4 — xong:** màn ⑧ Prompt (`prompt-canh`, một lần mỗi cảnh; code ghép phần cố định, AI chỉ dịch), frame nối, đánh dấu đã tạo video (báo khi prompt đổi sau đó), xuất prompt và kịch bản .txt. Đã chạy `npm test`, `npm run lint`, `npm run dev` và bấm thử màn ⑧ (dịch một cảnh với AI giả qua khung tác vụ thật, chép prompt, dán frame, đánh dấu đã tạo, xuất 2 file): chạy đúng. Chưa thử dịch với key Gemini thật.
+- Tiếp theo: dùng thật và tinh chỉnh (file thể loại, câu chữ prompt).

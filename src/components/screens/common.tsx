@@ -141,7 +141,7 @@ export function StatusBar({ project, sectionKey, blocking, onApprove, onKeep, on
           )}
         </div>
       )}
-      {!approved && blocking.length > 0 && <p className="text-sm text-red-700">Còn {blocking.length} lỗi cần sửa trước khi duyệt (xem danh sách bên dưới).</p>}
+      {!approved && blocking.length > 0 && <p className="text-sm text-red-700">Còn {blocking.length} lỗi cần sửa trước khi duyệt (xem danh sách phía trên).</p>}
     </div>
   );
 }

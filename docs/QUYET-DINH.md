@@ -25,11 +25,13 @@ Cập nhật: 2026-10-09. Mọi thiết kế và code sau này phải khớp v�
 
 - **Scene** = các beat cùng một bối cảnh và một mạch thời gian.
 - Màn sau chỉ đọc **bản đã duyệt** của các màn trước. Sửa màn trên thì màn dưới hiện cờ **"đã cũ"**.
+- Màn ⑥ trở đi đọc **kịch bản chốt** (sau khi ⑤ duyệt). Sửa nhận ở ⑤ được ghi thẳng vào ④.
 
 ## 3. Dữ liệu
 
 - Kịch bản lưu **dạng dữ liệu có cấu trúc** (cảnh → beat → các ô). App hiển thị như văn bản, xuất ra file khi cần.
 - Mỗi mục có **mã cố định**, **trạng thái** (nháp / đã duyệt / đã cũ), và **dựa trên phiên bản nào** của mục phía trên.
+- Trạng thái người / vật ghi theo dòng, mỗi tag một dòng. Trạng thái đầu beat do code lấy từ cuối beat trước.
 
 ## 4. Kiến thức thể loại
 
@@ -42,6 +44,7 @@ Cập nhật: 2026-10-09. Mọi thiết kế và code sau này phải khớp v�
 - Tạo video **theo thành phần** (nạp ảnh tham chiếu). **Không** tạo ảnh khung đầu. Nạp được **hơn 10 ảnh**.
 - **Một beat = một prompt = một lần tạo**, kể cả khi beat có nhiều shot. Không có tùy chọn tách shot.
 - **Không dùng Extend.**
+- **Bible (màn ⑥):** một **style cố định** xuyên suốt phim. Nhân vật đổi trang phục → mỗi bộ đồ một tag và một ảnh riêng; mỗi cảnh dùng đúng một bộ. Ảnh bối cảnh: mỗi cặp **địa điểm + thời điểm** có trong phim một ảnh. **Giọng nhân vật** chỉ dùng trong prompt video (phần thoại), không nằm trong ảnh.
 - **Frame nối, bản gọn:** bạn chụp frame từ video beat trước, dán vào beat đó; app tự thêm frame vào danh sách ảnh và prompt của beat sau (code làm, không gọi AI). Không chấm điểm frame. Chưa có frame thì prompt vẫn dùng được, kèm ghi chú độ khớp thấp hơn.
 
 ## 6. Khung prompt video (màn ⑧)
@@ -50,11 +53,14 @@ Cập nhật: 2026-10-09. Mọi thiết kế và code sau này phải khớp v�
 |---|---|---|
 | ① Ảnh tham chiếu | "Using the provided images: @a as …" — mỗi ảnh một vai trò | Code |
 | ② Không gian | Style + bối cảnh + ánh sáng của cảnh, giống từng chữ ở mọi beat cùng cảnh | Code chép bible |
-| ③ Lúc bắt đầu | Ai ở đâu, đồ vật trạng thái gì | Code từ trạng thái đầu beat |
+| ③ Lúc bắt đầu | Ai ở đâu, đồ vật trạng thái gì | Code lấy trạng thái đầu beat, AI dịch sang tiếng Anh |
 | ④ Các shot | `[00:00–00:03]` + câu máy + hành động; "Hard cut to" giữa các shot | Code (mốc giây, máy) + AI (dịch hành động) |
-| ⑤ Âm thanh | Ambient / Music / Dialogue | Code ghép, AI dịch |
-| ⑥ Giữ đúng | Số shot, 2–3 điều riêng của beat, không phụ đề | Code |
+| ⑤ Âm thanh | Ambient / Music / Dialogue (kèm giọng nhân vật chép từ bible) | Code ghép, AI dịch |
+| ⑥ Giữ đúng | Số shot, 2–3 điều riêng của beat, không phụ đề | Code (số shot, không phụ đề) + AI chọn 2–3 điều |
 
+- Mô tả ngoại hình nhân vật **không** chép vào prompt video (ảnh tham chiếu lo ngoại hình). Câu thoại giữ nguyên ngôn ngữ nói, code chép nguyên văn.
+- Frame nối chỉ dùng cho beat kế tiếp **trong cùng cảnh**, tag `@noitiep`.
+- Xuất file: prompt và kịch bản dạng **.txt**. Chi tiết: `docs/LUOT-4.md`.
 - Beat một shot: thêm "in a single continuous shot with no scene cuts" (Omni tự cắt nếu không dặn).
 - Mục tiêu độ dài: khoảng 150–220 từ cho beat 2 shot.
 - Code tự kiểm trước khi xuất: tag nạp và tag trong prompt khớp nhau; tổng giây khớp; phần ② giống các beat cùng cảnh; câu hành động không tả lại bối cảnh hay ánh sáng.

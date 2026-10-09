@@ -122,3 +122,30 @@ export const treatment: TaskDef<TreatmentInput, TreatmentData> = {
   check: (out, input, ctx) => checkTreatment(out, input.brief.thoiLuongGiay, ctx.genre?.cacPhan || []),
   isEmpty: (out) => out.phan.length === 0,
 };
+
+/** Đọc treatment đã duyệt (các màn sau gửi lên). */
+export function parseTreatmentData(v: unknown): TreatmentData {
+  const o = obj(v);
+  const phan: PhanTruyen[] = arr(o.phan).map((p) => {
+    const x = obj(p);
+    return {
+      id: str(x.id, 20),
+      ten: str(x.ten, 120),
+      vaiTro: str(x.vaiTro, 300),
+      batDau: int(x.batDau),
+      ketThuc: int(x.ketThuc),
+      tomTat: str(x.tomTat, 3000),
+      mocTruyen: arr(x.mocTruyen).map((m) => str(m, 300)).filter(Boolean),
+      phanDoan: arr(x.phanDoan).map((s) => {
+        const y = obj(s);
+        return { id: str(y.id, 20), ten: str(y.ten, 120), mucTieu: str(y.mucTieu, 300), batDau: int(y.batDau), ketThuc: int(y.ketThuc), tomTat: str(y.tomTat, 1500) };
+      }),
+    };
+  });
+  const caiDung = arr(o.caiDung).map((c) => {
+    const x = obj(c);
+    return { id: str(x.id, 20), chiTiet: str(x.chiTiet, 300), cai: str(x.cai, 20), dung: str(x.dung, 20) };
+  });
+  if (!phan.length) throw new Error('Chưa có treatment. Duyệt màn ③ trước.');
+  return { phan, caiDung };
+}

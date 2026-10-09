@@ -7,7 +7,11 @@ import { ProjectUsageBadge } from './UsagePanel';
 import BriefScreen from './screens/BriefScreen';
 import NhanVatScreen from './screens/NhanVatScreen';
 import TreatmentScreen from './screens/TreatmentScreen';
-import LegacyDesignScreen from './screens/LegacyDesignScreen';
+import KichBanScreen from './screens/KichBanScreen';
+import RaSoatScreen from './screens/RaSoatScreen';
+import BibleScreen from './screens/BibleScreen';
+import PhanCanhScreen from './screens/PhanCanhScreen';
+import PromptScreen from './screens/PromptScreen';
 import PlaceholderStep from './steps/PlaceholderStep';
 
 interface Props {
@@ -22,18 +26,11 @@ interface Props {
 const STAGE_NAMES: Record<number, string> = { 1: 'Phát triển', 2: 'Tiền kỳ', 3: 'Sản xuất' };
 
 /** Màn đã làm ở lượt nào (màn chưa làm hiện trang giữ chỗ). */
-const PLANNED: Partial<Record<SectionKey, { title: string; items: string[] }>> = {
-  kichBan: { title: 'Kịch bản', items: ['Dàn ý cảnh (cảnh = các beat cùng bối cảnh) — bạn duyệt trước', 'Viết beat cho từng cảnh: hành động, thoại, âm thanh, số giây (3–10 giây mỗi beat)', 'Ai và vật gì có mặt, trạng thái đầu – cuối beat, thay đổi trạng thái'] },
-  raSoat: { title: 'Rà soát', items: ['AI chấm kịch bản theo file thể loại', 'Danh sách vấn đề và đề xuất sửa, bạn nhận hoặc bỏ từng mục', 'Đề xuất được áp thẳng vào kịch bản'] },
-  phanCanh: { title: 'Phân cảnh', items: ['Mỗi beat chia thành shot: cỡ cảnh, góc máy, chuyển động, số giây', 'Ô Mô tả tiếng Việt cho từng shot', 'Khung bàn giao để chụp frame nối'] },
-  prompt: { title: 'Prompt', items: ['Prompt video cho từng beat theo khung 6 phần', 'Code chép phần cố định từ bible, AI chỉ dịch hành động', 'Frame nối và code tự kiểm trước khi xuất'] },
-};
+const PLANNED: Partial<Record<SectionKey, { title: string; items: string[] }>> = {};
 
 type ScreenState = 'duyet' | 'nhap' | 'cu' | 'khoa' | 'trong';
 
 function screenState(p: Project, key: SectionKey): ScreenState {
-  // Màn ⑥ đang dùng bước thiết kế cũ (tạm), mở được ngay
-  if (key === 'bible') return 'trong';
   if (missingDeps(p, key).length) return 'khoa';
   const s = getSection(p, key);
   if (!s) return 'trong';
@@ -56,10 +53,6 @@ function Workspace({ project, onUpdate, onDelete, onBack }: { project: Project; 
   const goTo = (key: SectionKey) => {
     onUpdate({ manHinh: key });
     window.scrollTo({ top: 0 });
-  };
-  const next = () => {
-    const i = SCREENS.findIndex((s) => s.key === current.key);
-    if (i < SCREENS.length - 1) goTo(SCREENS[i + 1].key);
   };
 
   return (
@@ -120,7 +113,11 @@ function Workspace({ project, onUpdate, onDelete, onBack }: { project: Project; 
       {current.key === 'brief' && <BriefScreen project={project} onUpdate={onUpdate} onGo={goTo} />}
       {current.key === 'nhanVat' && <NhanVatScreen project={project} onUpdate={onUpdate} onGo={goTo} />}
       {current.key === 'treatment' && <TreatmentScreen project={project} onUpdate={onUpdate} onGo={goTo} />}
-      {current.key === 'bible' && <LegacyDesignScreen project={project} onUpdate={onUpdate} onNext={next} />}
+      {current.key === 'kichBan' && <KichBanScreen project={project} onUpdate={onUpdate} onGo={goTo} />}
+      {current.key === 'raSoat' && <RaSoatScreen project={project} onUpdate={onUpdate} onGo={goTo} />}
+      {current.key === 'bible' && <BibleScreen project={project} onUpdate={onUpdate} onGo={goTo} />}
+      {current.key === 'phanCanh' && <PhanCanhScreen project={project} onUpdate={onUpdate} onGo={goTo} />}
+      {current.key === 'prompt' && <PromptScreen project={project} onUpdate={onUpdate} onGo={goTo} />}
       {PLANNED[current.key] && <PlaceholderStep title={`${current.no}. ${PLANNED[current.key]!.title}`} items={PLANNED[current.key]!.items} />}
 
       <div className="pt-6 border-t border-gray-100">

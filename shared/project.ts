@@ -13,8 +13,9 @@ export const DEPS: Record<SectionKey, SectionKey[]> = {
   treatment: ['brief', 'nhanVat'],
   kichBan: ['brief', 'nhanVat', 'treatment'],
   raSoat: ['kichBan'],
-  bible: ['brief', 'nhanVat', 'kichBan'],
-  phanCanh: ['kichBan', 'bible'],
+  // Màn ⑥ trở đi đọc kịch bản chốt (sau khi ⑤ duyệt)
+  bible: ['brief', 'nhanVat', 'kichBan', 'raSoat'],
+  phanCanh: ['kichBan', 'raSoat', 'bible'],
   prompt: ['phanCanh', 'bible'],
 };
 
@@ -159,16 +160,350 @@ export interface TreatmentData {
 /** Từ bao nhiêu giây thì mỗi phần phải chia thành phân đoạn. */
 export const PHAN_DOAN_TU_GIAY = 180;
 
+/* ============================ MÀN ④ — KỊCH BẢN ============================ */
+
+/** Một dòng trạng thái: một người hoặc một vật (vị trí + tình trạng). */
+export interface DongTrangThai {
+  tag: string;
+  moTa: string;
+}
+
+export interface CanhDanY {
+  /** Mã cố định: S1, S2… (không đánh lại số khi chèn / xoá) */
+  id: string;
+  /** id phần của treatment (P1…) */
+  phan: string;
+  diaDiem: string;
+  tagDiaDiem: string;
+  thoiDiem: string;
+  /** Ánh sáng, tiếng Việt (màn ⑥ chuyển thành mô tả cố định) */
+  anhSang: string;
+  /** Đầu cảnh thế nào → cuối cảnh thế nào */
+  chuyenBien: string;
+  /** Tag nhân vật có mặt */
+  coMat: string[];
+  batDau: number;
+  ketThuc: number;
+  dauCanh: DongTrangThai[];
+  cuoiCanh: DongTrangThai[];
+}
+
+/** Dòng Cài – Dùng của treatment đặt vào cảnh. id = id dòng ở treatment (C1…); cai / dung = id cảnh. */
+export interface CaiDungCanh {
+  id: string;
+  cai: string;
+  dung: string;
+}
+
+export interface DanY {
+  canh: CanhDanY[];
+  caiDung: CaiDungCanh[];
+}
+
+export interface ThoaiCau {
+  /** Tag nhân vật, hoặc tên người không có ở màn ② (người qua đường…) */
+  ai: string;
+  cachNoi: string;
+  cau: string;
+}
+
+export interface DaoCu {
+  tag: string;
+  moTa: string;
+}
+
+export interface ThayDoi {
+  tag: string;
+  truoc: string;
+  sau: string;
+}
+
+export interface Beat {
+  /** Mã cố định: B001… (không đánh lại số, không dùng lại số đã xoá) */
+  id: string;
+  giay: number;
+  hanhDong: string;
+  thoai: ThoaiCau[];
+  amThanh: string;
+  camXuc: string;
+  /** Tag người / vật có mặt */
+  coMat: string[];
+  /** Đạo cụ xuất hiện lần đầu ở beat này */
+  daoCuMoi: DaoCu[];
+  thayDoi: ThayDoi[];
+  /** id dòng Cài – Dùng thể hiện ở beat này */
+  caiDung: string[];
+  /** Trạng thái cuối beat. Trạng thái đầu beat do code lấy từ cuối beat trước. */
+  cuoiBeat: DongTrangThai[];
+}
+
+export interface CanhViet {
+  beats: Beat[];
+  /** Dấu "đầu vào" lúc viết (dòng dàn ý + trạng thái cuối cảnh trước). Đổi → cảnh cần xem lại. */
+  dauVao: string;
+  updatedAt: number;
+}
+
+export interface KichBanData {
+  danY: DanY;
+  /** Dàn ý đã được duyệt riêng (mới viết beat được) */
+  danYDuyet: boolean;
+  /** Beat của từng cảnh, theo id cảnh */
+  canh: Record<string, CanhViet>;
+  /** Số tiếp theo cho mã cảnh / beat — chỉ tăng */
+  soCanh: number;
+  soBeat: number;
+}
+
+/** Mỗi beat 3–10 giây (một lần tạo video trên Omni Flash). */
+export const BEAT_MIN = 3;
+export const BEAT_MAX = 10;
+
+/* ============================ MÀN ⑤ — RÀ SOÁT ============================ */
+
+export type MucVanDe = 'cao' | 'vua' | 'thap';
+/** chua: chưa quyết · nhan: nhận, chờ sửa · da-sua: đã sửa · bo: bỏ qua */
+export type XuLy = 'chua' | 'nhan' | 'da-sua' | 'bo';
+
+export const LOAI_VAN_DE = ['nhân quả', 'cài – dùng', 'nhịp', 'thời lượng', 'thoại', 'khó với AI video', 'đúng thể loại', 'khác'] as const;
+
+export interface DiemTieuChi {
+  ten: string;
+  toiDa: number;
+  diem: number;
+  nhanXet: string;
+}
+
+export interface VanDe {
+  id: string;
+  loai: string;
+  muc: MucVanDe;
+  /** id cảnh liên quan */
+  canh: string[];
+  /** id beat liên quan */
+  beat: string[];
+  moTa: string;
+  deXuat: string;
+  /** Cần thêm / bớt cảnh hoặc đổi giây của cảnh → không sửa tự động */
+  canSuaDanY: boolean;
+  /** Các cảnh của vấn đề đã nhận bản sửa — đủ hết mới là "đã sửa" */
+  daSuaCanh: string[];
+  xuLy: XuLy;
+  lyDo: string;
+}
+
+/** Bản viết lại một cảnh theo đề xuất, chờ người dùng nhận. */
+export interface BanSua {
+  canhId: string;
+  vanDe: string[];
+  beats: Beat[];
+  /** Dấu các beat gốc lúc gửi AI — đổi nghĩa là cảnh đã được sửa ở màn ④ trong lúc chờ */
+  goc: string;
+  /** Dấu đầu vào của cảnh lúc gửi AI (cảnh trước đổi sau đó → cảnh hiện "cần xem lại") */
+  dauVao: string;
+  errors: string[];
+  warnings: string[];
+}
+
+export interface RaSoatData {
+  diem: DiemTieuChi[];
+  /** Điểm đạt (từ thang của thể loại) */
+  nguong: number;
+  nhanXet: string;
+  vanDe: VanDe[];
+  banSua: BanSua[];
+  /** Các vấn đề đã bỏ qua, giữ qua các lần rà lại */
+  daBoQua: { moTa: string; lyDo: string; at: number }[];
+}
+
+/* ============================ MÀN ⑦ — PHÂN CẢNH ============================ */
+
+export type CoCanh = 'toan' | 'toan-trung' | 'trung' | 'can-trung' | 'can' | 'dac-ta';
+export type GocMay = 'ngang' | 'thap' | 'cao' | 'tren-xuong' | 'qua-vai' | 'goc-nhin';
+export type ChuyenDong = 'tinh' | 'lia-ngang' | 'lia-doc' | 'day-vao' | 'keo-ra' | 'di-theo' | 'cam-tay';
+
+export interface Shot {
+  /** Mã cố định trong beat: B007.1, B007.2… (không đánh lại số) */
+  id: string;
+  /** Số giây, bước 0,5 */
+  giay: number;
+  coCanh: CoCanh;
+  gocMay: GocMay;
+  chuyenDong: ChuyenDong;
+  /** Mô tả tiếng Việt — nguồn duy nhất cho câu hành động ở màn ⑧ */
+  moTa: string;
+  /** Tag người / vật trong khung */
+  trongKhung: string[];
+  /** Vị trí (0, 1, …) các câu thoại của beat nói trong shot này */
+  thoai: number[];
+}
+
+export interface PhanCanhBeat {
+  shots: Shot[];
+  /** Số tiếp theo cho mã shot của beat — chỉ tăng */
+  soShot: number;
+}
+
+export interface PhanCanhCanh {
+  /** Shot theo id beat */
+  beats: Record<string, PhanCanhBeat>;
+  /** Dấu các beat của cảnh lúc phân cảnh — đổi → cảnh cần xem lại */
+  dauVao: string;
+  updatedAt: number;
+}
+
+export interface PhanCanhData {
+  canh: Record<string, PhanCanhCanh>;
+}
+
+/* ============================ MÀN ⑧ — PROMPT ============================ */
+
+/** Một câu tiếng Anh về một người / vật lúc bắt đầu beat. */
+export interface CauTag {
+  tag: string;
+  cau: string;
+}
+
+/** Phần AI dịch cho một câu thoại (câu thoại giữ nguyên văn, code chép). */
+export interface ThoaiDich {
+  /** Cách nói, tiếng Anh ("softly") */
+  cachNoi: string;
+  /** Người nói, tiếng Anh — dùng khi người nói không có ảnh nạp ở beat (nói qua điện thoại, người qua đường) */
+  nguoiNoi: string;
+  /** Câu thoại gốc lúc dịch ("tag|câu") — để thêm / xoá câu ở màn 4 không làm phần dịch lệch sang câu khác */
+  goc?: string;
+}
+
+/** Phần AI dịch của một beat. Phần cố định (ảnh, không gian, máy, giọng, thoại) do code ghép lúc hiển thị. */
+export interface PromptBeat {
+  lucBatDau: CauTag[];
+  /** Câu hành động tiếng Anh theo mã shot */
+  shots: Record<string, string>;
+  ambient: string;
+  music: string;
+  /** Theo vị trí câu thoại của beat */
+  thoai: ThoaiDich[];
+  /** 2–3 điều riêng của beat cần giữ đúng, tiếng Anh */
+  giuDung: string[];
+}
+
+export interface PromptCanh {
+  beats: Record<string, PromptBeat>;
+  /** Dấu chữ tiếng Việt nguồn lúc dịch — đổi → cảnh cần dịch lại */
+  dauVao: string;
+  updatedAt: number;
+}
+
+export interface PromptData {
+  canh: Record<string, PromptCanh>;
+  /** Frame cuối video của beat (id ảnh trong kho ảnh), dùng làm frame nối cho beat sau cùng cảnh */
+  frame: Record<string, string>;
+  /** Dấu prompt của beat lúc dán frame — prompt đổi sau đó thì báo frame có thể không khớp */
+  frameTheo: Record<string, string>;
+  /** Beat đã tạo video ở Flow */
+  /** Dấu prompt lúc đánh dấu (rỗng / không có = chưa) — prompt đổi sau đó thì báo có thể cần tạo lại */
+  daTao: Record<string, string>;
+}
+
 /* ============================ DỰ ÁN ============================ */
 
-/** Dữ liệu tạm của bước Nhân vật & đạo cụ cũ — dùng tạm ở màn ⑥ cho tới lượt 3. */
-export interface ThietKeTam {
-  synopsis: string;
+/* ============================ MÀN ⑥ — BIBLE & THAM CHIẾU ============================ */
+
+/** Một bộ đồ của nhân vật = một ảnh tham chiếu. */
+export interface BoDo {
+  /** Tag ảnh: bộ đầu = tag nhân vật, bộ thêm do code đặt (lanngu) */
+  tag: string;
+  /** Tên bộ đồ, tiếng Việt ("đồ đi làm", "đồ ngủ") */
+  ten: string;
+  /** Cảnh nhân vật mặc bộ này */
+  canh: string[];
+  /** Mô tả cố định, tiếng Anh: ngoại hình + trang phục (chép nguyên văn vào prompt ảnh và prompt video) */
+  moTa: string;
+  /** Ô Note của ảnh, tiếng Việt */
+  note: string;
+  /** Khung ảnh, tiếng Anh: góc, tư thế, nền */
+  khungAnh: string;
+  /** Vai trò ảnh ở màn ⑧, tiếng Anh ngắn ("Lan in her office clothes") */
+  vaiTro: string;
+}
+
+export interface BibleNhanVat {
+  tag: string;
+  ten: string;
+  /** Cảnh có mặt (cần ảnh) */
+  canh: string[];
+  coThoai: boolean;
+  /** Giọng, tiếng Anh — chỉ dùng trong prompt video (phần thoại) */
+  giong: string;
+  /** Rỗng nếu nhân vật không có mặt (chỉ có giọng) */
+  bo: BoDo[];
+  /** Không còn trong kịch bản (sau khi bóc tách lại) */
+  khongDung?: boolean;
+}
+
+export interface BibleDaoCu {
+  tag: string;
+  /** Mô tả trong kịch bản (tiếng Việt) */
+  moTaKichBan: string;
+  /** Các trạng thái gặp trong phim, theo thứ tự (tiếng Việt) */
+  trangThai: string[];
+  canh: string[];
+  moTa: string;
+  note: string;
+  khungAnh: string;
+  vaiTro: string;
+  khongDung?: boolean;
+}
+
+/** Một ảnh bối cảnh: một cặp địa điểm + thời điểm. */
+export interface BienTheBoiCanh {
+  tag: string;
+  thoiDiem: string;
+  canh: string[];
+  note: string;
+  khungAnh: string;
+  vaiTro: string;
+  /** Thời điểm này không còn trong kịch bản (giữ lại để người dùng xoá) */
+  khongDung?: boolean;
+}
+
+export interface BibleBoiCanh {
+  /** Tag địa điểm của dàn ý */
+  tag: string;
+  ten: string;
+  canh: string[];
+  /** Mô tả cố định của không gian, tiếng Anh */
+  moTa: string;
+  bienThe: BienTheBoiCanh[];
+  khongDung?: boolean;
+}
+
+export interface AnhSangCanh {
+  canh: string;
+  /** Tag địa điểm + thời điểm + ánh sáng tiếng Việt của dàn ý (để biết cảnh nào giống nhau) */
+  diaDiem: string;
+  thoiDiem: string;
+  goc: string;
+  /** Câu ánh sáng tiếng Anh cố định */
+  moTa: string;
+}
+
+export interface AnhThamChieu {
+  imageId?: string;
+  /** AI thấy gì trong ảnh lúc quét */
+  seen?: string;
+  warning?: string;
+}
+
+export interface BibleData {
   style: string;
-  characterSeeds: { name: string; brief: string }[];
-  propSeeds: { name: string; brief: string }[];
-  design?: { characters: any[]; props: any[] };
-  assets?: { tag: string; kind: 'character' | 'prop'; note: string; imageId?: string; seen?: string; warning?: string }[];
+  phuongAnStyle: { style: string; giaiThich: string }[];
+  nhanVat: BibleNhanVat[];
+  daoCu: BibleDaoCu[];
+  boiCanh: BibleBoiCanh[];
+  anhSang: AnhSangCanh[];
+  /** Ảnh tham chiếu theo tag */
+  anh: Record<string, AnhThamChieu>;
 }
 
 export interface Project {
@@ -184,8 +519,12 @@ export interface Project {
     brief?: Section<Brief>;
     nhanVat?: Section<NhanVatData>;
     treatment?: Section<TreatmentData>;
+    kichBan?: Section<KichBanData>;
+    raSoat?: Section<RaSoatData>;
+    bible?: Section<BibleData>;
+    phanCanh?: Section<PhanCanhData>;
+    prompt?: Section<PromptData>;
   };
-  thietKeTam: ThietKeTam;
 }
 
 export type ProjectPatch = Partial<Project> | ((latest: Project) => Partial<Project>);
@@ -215,7 +554,6 @@ export function newProjectData(id: string, now: number, title = 'Dự án mới'
     manHinh: 'brief',
     briefWork: { input: { ...DEFAULT_BRIEF_INPUT, thoai: { ...DEFAULT_BRIEF_INPUT.thoai } }, cauHoi: [], nhanXet: '', phuongAn: [], chon: -1 },
     sections: {},
-    thietKeTam: { synopsis: '', style: '', characterSeeds: [], propSeeds: [] },
   };
 }
 

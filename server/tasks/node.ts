@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import type { TaskDeps, TaskLog } from './framework';
-import { parseGenre, Genre, infoOf } from './genre';
+import { parseGenre, Genre, infoOf, beatGiayOf } from './genre';
 import { generateWithFallback } from '../ai';
 
 const ROOT = process.cwd();
@@ -37,6 +37,8 @@ export interface GenreSummary {
   thoiLuong: string;
   tiLe: string;
   cacPhan: string[];
+  /** Khoảng giây thể loại khuyên cho mỗi beat */
+  beatGiay: [number, number] | null;
 }
 
 export function listGenres(): GenreSummary[] {
@@ -48,7 +50,7 @@ export function listGenres(): GenreSummary[] {
     .map((f) => {
       const id = f.replace(/\.md$/, '');
       const g = parseGenre(id, fs.readFileSync(path.join(GENRE_DIR, f), 'utf8'));
-      return { id, ten: g.ten, moTa: g.moTa, thoiLuong: infoOf(g.thongTin, 'Thời lượng hợp'), tiLe: infoOf(g.thongTin, 'Tỉ lệ'), cacPhan: g.cacPhan };
+      return { id, ten: g.ten, moTa: g.moTa, thoiLuong: infoOf(g.thongTin, 'Thời lượng hợp'), tiLe: infoOf(g.thongTin, 'Tỉ lệ'), cacPhan: g.cacPhan, beatGiay: beatGiayOf(g) };
     });
 }
 

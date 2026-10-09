@@ -111,6 +111,18 @@ function classify(error: any): ErrorKind {
   return 'other';
 }
 
+/** Câu lỗi gọn: Google hay trả cả khối JSON ({"error":{"message":…}}) — chỉ lấy câu message. */
+function googleMessage(error: any): string {
+  const raw = String(error?.message || error || '');
+  try {
+    const m = JSON.parse(raw)?.error?.message;
+    if (typeof m === 'string' && m) return m;
+  } catch {
+    /* không phải JSON */
+  }
+  return raw;
+}
+
 /** Thời gian cho key nghỉ theo loại lỗi. */
 const REST_MS: Record<ErrorKind, number> = {
   rate: 60_000, // giới hạn theo phút
@@ -199,8 +211,9 @@ async function runWithPool<T>(
       `Mọi key đang tạm nghỉ sau lỗi trước đó${wait ? ` — thử lại sau khoảng ${wait} phút` : ''}. Thêm key khác ở tab Cài đặt, hoặc khởi động lại app để xoá trạng thái nghỉ.`
     );
   }
-  const err = new Error(`${lastError?.message || 'Không gọi được Gemini.'}${detail}`);
-  throw err;
+  if (lastError && classify(lastError) === 'badkey' && tried.every((t) => t.endsWith(explain('badkey'))))
+    throw new Error(`Key không hợp lệ — kiểm tra lại key ở tab Cài đặt (bấm "Kiểm tra").${detail}`);
+  throw new Error(`${googleMessage(lastError) || 'Không gọi được Gemini.'}${detail}`);
 }
 
 /** Gọi một prompt, tự chọn key/model theo ưu tiên. */

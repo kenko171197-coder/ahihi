@@ -29,7 +29,7 @@ export interface TaskDef<I, O> {
   /** Biến cho khuôn prompt */
   vars(input: I, ctx: TaskCtx): Vars;
   /** Chuẩn hoá kết quả thô của AI (ném lỗi nếu không dùng được) */
-  normalize(raw: unknown, input: I): O;
+  normalize(raw: unknown, input: I, ctx: TaskCtx): O;
   /** Code kiểm kết quả đã chuẩn hoá */
   check(out: O, input: I, ctx: TaskCtx): CheckResult;
   /** Kết quả rỗng (không có nội dung chính) — chỉ được chọn khi không còn bản nào khác */
@@ -113,7 +113,7 @@ export async function runTask<I, O>(def: TaskDef<I, O>, body: unknown, projectId
         errors = [INVALID_JSON_ERROR];
         previous = '';
       } else {
-        const out = def.normalize(res.json, input);
+        const out = def.normalize(res.json, input, ctx);
         const check = def.check(out, input, ctx);
         const empty = def.isEmpty(out);
         errors = empty && !check.errors.length ? ['Kết quả không có nội dung.'] : check.errors;

@@ -7,6 +7,7 @@ Những khoảnh khắc nhỏ, quen thuộc trong cuộc sống hằng ngày: gi
 - **Thoại:** ít, tự nhiên; có thể không thoại
 - **Hình thức:** người thật hoặc hoạt hình đều được
 - **Các phần:** Nếp thường ngày · Gợn sóng · Khoảnh khắc chạm · Dư âm
+- **Độ dài beat:** 4–8 giây
 
 ---
 

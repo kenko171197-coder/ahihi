@@ -7,10 +7,7 @@ import { knowledgeStatus } from './server/knowledge';
 import { runTask } from './server/tasks/framework';
 import { TASK_DEFS } from './server/tasks/registry';
 import { nodeDeps, listGenres, listLogs, getLog } from './server/tasks/node';
-import {
-  validateDesign, buildDesignPrompt, DESIGN_SCHEMA, normalizeDesign,
-  validateMatch, buildMatchParts, MATCH_SCHEMA, normalizeMatches,
-} from './server/design';
+import { validateMatch, buildMatchParts, MATCH_SCHEMA, normalizeMatches } from './server/anhThamChieu';
 
 /** Gọi Gemini với một prompt, ép trả JSON theo khuôn. `task` quyết định model (bảng ở tab Cài đặt). */
 async function askJson(prompt: string | any[], schema: any, temperature: number, task: string) {
@@ -149,15 +146,7 @@ async function startServer() {
     return route('Tác vụ AI lỗi', () => runTask(def, req.body?.input, projectId, nodeDeps))(req, res);
   });
 
-  // Bước Nhân vật & đạo cụ cũ (tạm ở màn ⑥, làm lại ở lượt 3)
-  app.post('/api/design', route('Không tạo được thiết kế', async (req) => {
-    const r = validateDesign(req.body);
-    const raw = await askJson(buildDesignPrompt(r), DESIGN_SCHEMA, 0.7, 'design');
-    const allowed = new Set([...r.characters, ...r.props].map((s) => s.tag));
-    return { design: normalizeDesign(raw, allowed) };
-  }));
-
-  // Bước 4 — quét ảnh người dùng gửi về, gán @tag
+  // Màn ⑥ — quét ảnh tham chiếu người dùng gửi về, gán @tag
   app.post('/api/match-images', route('Không quét được ảnh', async (req) => {
     const { images, tags } = validateMatch(req.body);
     const raw = await askJson(buildMatchParts(images, tags), MATCH_SCHEMA, 0.2, 'match');
