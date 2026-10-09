@@ -143,7 +143,7 @@ export default function PromptScreen({ project, onUpdate, onGo }: Props) {
   const onDaTao = (beatId: string, v: boolean) =>
     edit((x, p) => {
       const daTao = { ...x.daTao };
-      if (v) daTao[beatId] = dauPrompt(textCua(p, beatId)) || 'x';
+      if (v) daTao[beatId] = dauPrompt(textCua(p, beatId));
       else delete daTao[beatId];
       return { ...x, daTao };
     });

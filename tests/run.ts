@@ -32,7 +32,7 @@ import {
 } from '../shared/project';
 import { sentenceCount } from '../server/tasks/util';
 import { promptCanh } from '../server/tasks/defs/prompt';
-import { ghepBeat, ghepCanh, nguonCanh, khopDich, dauVaoPrompt, tinhTrangPrompt, checkPromptDich, emptyPrompt, ngonNguEn, FRAME_TAG, MOT_SHOT, KHONG_CHU, GhepCtx } from '../shared/prompt';
+import { docPrompt, ghepBeat, ghepCanh, nguonCanh, khopDich, dauVaoPrompt, tinhTrangPrompt, checkPromptDich, emptyPrompt, ngonNguEn, FRAME_TAG, MOT_SHOT, KHONG_CHU, GhepCtx } from '../shared/prompt';
 import { xuatPromptTxt, xuatKichBanTxt } from '../shared/xuat';
 import type { PromptBeat } from '../shared/project';
 
@@ -1264,6 +1264,10 @@ await test('soát lượt 4: xoá một câu thoại ở màn 4 → phần dịc
   const k = khopDich(nguonCanh(kb3, pcHaiShot(kb3).canh.S2, 'S2'), dich);
   assert.equal(k[b.id].thoai.length, 1);
   assert.equal(k[b.id].thoai[0].cachNoi, 'gently');
+  // Sửa lỗi chính tả câu (cùng người nói, cùng vị trí) → giữ phần dịch
+  const kb4 = suaCanh(kb3, 'S2', beatsOf(kb3, 'S2').map((x) => (x.id === b.id ? { ...x, thoai: [{ ...hai[1], cau: 'Ăn đi con nhé.' }] } : x)), 5);
+  assert.equal(khopDich(nguonCanh(kb4, pcHaiShot(kb4).canh.S2, 'S2'), k)[b.id].thoai[0].cachNoi, 'gently');
+  assert.deepEqual(docPrompt({ daTao: { B001: true as any } }).daTao, { B001: 'x' }, 'dấu đã tạo kiểu cũ không bị báo đổi');
 });
 
 await test('soát lượt 4: file prompt ghi rõ cảnh cần dịch lại và màn trên chưa chốt', () => {

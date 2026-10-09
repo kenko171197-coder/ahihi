@@ -182,7 +182,7 @@ function BeatPrompt({ r, n, d, chars, coNhac, laBeatCuoi, frameId, daTao, doiSau
           <CopyButton text={r.text} label="Chép prompt" />
         </div>
       ) : (
-        <p className="text-sm text-gray-500">Beat chưa dịch — bấm "Dịch cảnh này", hoặc "Tự viết" rồi điền phần dịch.</p>
+        <p className="text-sm text-gray-500">{r.soShot ? 'Beat chưa dịch — bấm "Dịch cảnh này", hoặc "Tự viết" rồi điền phần dịch.' : 'Beat chưa có shot — phân cảnh ở màn 7 trước.'}</p>
       )}
 
       <Issues errors={r.chuaDich ? r.errors.filter((e) => e !== 'Beat chưa dịch.') : r.errors} warnings={r.warnings} />
@@ -290,7 +290,7 @@ export default function CanhPrompt({ no, canh, nguon, ketQua, dich, tinhTrang, f
               frameId={frames[n.beat.id]}
               daTao={!!dauTao}
               doiSauTao={!!dauTao && dauTao !== 'x' && dauTao !== dauPrompt(r.text)}
-              frameLech={!!truoc && !!frames[truoc.beatId] && !!dauFrame && dauFrame !== dauPrompt(truoc.text)}
+              frameLech={!!truoc && !!frames[truoc.beatId] && !!dauFrame && dauFrame !== 'x' && dauFrame !== dauPrompt(truoc.text)}
               busy={!!running}
               onDich={(d) => onDich(n.beat.id, d)}
               onFrame={(f) => onFrame(n.beat.id, f)}

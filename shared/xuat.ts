@@ -24,7 +24,7 @@ export function xuatPromptTxt(ctx: GhepCtx & { title: string; tiLe: string; chua
       out.push(`Ảnh cần nạp: ${r.anh.map((a) => `@${a.tag}${a.loai === 'frame' ? ` (frame cuối ${r.beatTruoc})` : a.imageId ? '' : ' (CHƯA CÓ ẢNH)'}`).join(', ') || '(không có)'}`);
       if (r.chuaCoFrame) out.push(`Chưa có frame nối từ ${r.beatTruoc} — độ khớp thấp hơn.`);
       if (r.errors.length) out.push(`CẦN SỬA: ${r.errors.join(' · ')}`);
-      out.push('', r.text || '(Beat chưa dịch — vào màn 8 để dịch.)', '');
+      out.push('', r.text || (r.soShot ? '(Beat chưa dịch — vào màn 8 để dịch.)' : '(Beat chưa có shot — phân cảnh ở màn 7 trước.)'), '');
     });
   });
   return out.join('\n');

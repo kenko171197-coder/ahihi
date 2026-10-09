@@ -28,10 +28,16 @@ export const HANH_DONG_TU = 45;
 export const emptyPrompt = (): PromptData => ({ canh: {}, frame: {}, frameTheo: {}, daTao: {} });
 
 /** Dữ liệu lưu từ bản trước có thể thiếu trường mới. */
-export const docPrompt = (p?: Partial<PromptData>): PromptData => ({ ...emptyPrompt(), ...(p || {}) });
+export function docPrompt(p?: Partial<PromptData>): PromptData {
+  const d = { ...emptyPrompt(), ...(p || {}) };
+  // Dấu "đã tạo" kiểu cũ (true) → 'x' = đã tạo nhưng không biết theo prompt nào (không báo đổi)
+  const daTao: Record<string, string> = {};
+  Object.entries(d.daTao || {}).forEach(([k, v]) => v && (daTao[k] = typeof v === 'string' ? v : 'x'));
+  return { ...d, daTao };
+}
 
-/** Dấu của một prompt đã ghép (để biết prompt có đổi sau khi tạo video / dán frame không). */
-export const dauPrompt = (text: string) => (text ? hash(text) : '');
+/** Dấu của một prompt đã ghép (để biết prompt có đổi sau khi tạo video / dán frame không). Prompt rỗng → '-'. */
+export const dauPrompt = (text: string) => (text ? hash(text) : '-');
 
 export const gocThoai = (t: { ai: string; cau: string }) => `${t.ai}|${t.cau}`;
 
@@ -138,7 +144,9 @@ export function khopDich(nguon: NguonBeat[], old: Record<string, PromptBeat> = {
       // Thoại: khớp theo câu gốc; bản dịch cũ chưa ghi câu gốc thì khớp theo vị trí
       thoai: n.beat.thoai.map((t, k) => {
         const g = gocThoai(t);
-        const cu = o.thoai.find((x) => x.goc === g) || (o.thoai[k] && !o.thoai[k].goc ? o.thoai[k] : undefined);
+        // Không thấy câu gốc (vd. sửa lỗi chính tả câu thoại): lấy câu cùng vị trí nếu cùng người nói
+        const cungViTri = o.thoai[k] && (!o.thoai[k].goc || o.thoai[k].goc!.split('|')[0] === t.ai) ? o.thoai[k] : undefined;
+        const cu = o.thoai.find((x) => x.goc === g) || cungViTri;
         return { cachNoi: cu?.cachNoi || '', nguoiNoi: cu?.nguoiNoi || '', goc: g };
       }),
       giuDung: o.giuDung.slice(0, GIU_DUNG_MAX),
@@ -294,7 +302,8 @@ export function ghepBeat(ctx: GhepCtx, canhId: string, beatId: string): PromptKe
     if (!cau.trim()) errors.push(`Shot ${k + 1} chưa có câu hành động.`);
     if (ANH_SANG_EN.test(cau)) warnings.push(`Shot ${k + 1}: câu hành động nhắc ánh sáng ("${ANH_SANG_EN.exec(cau)![0]}") — ánh sáng đã có ở phần không gian.`);
     if (NGOAI_HINH_EN.test(cau)) warnings.push(`Shot ${k + 1}: câu hành động tả ngoại hình / trang phục ("${NGOAI_HINH_EN.exec(cau)![0]}") — ảnh tham chiếu đã lo phần này.`);
-    if (BOI_CANH_EN.test(cau) || (bt && cau.toLowerCase().includes(`@${bt.toLowerCase()}`))) warnings.push(`Shot ${k + 1}: câu hành động tả lại bối cảnh ("${BOI_CANH_EN.exec(cau)?.[0] || `@${bt}`}") — bối cảnh đã có ở phần không gian.`);
+    const tagBoiCanh = [bt, canh.tagDiaDiem].filter(Boolean).find((t) => cau.toLowerCase().includes(`@${t.toLowerCase()}`));
+    if (BOI_CANH_EN.test(cau) || tagBoiCanh) warnings.push(`Shot ${k + 1}: câu hành động tả lại bối cảnh ("${BOI_CANH_EN.exec(cau)?.[0] || `@${tagBoiCanh}`}") — bối cảnh đã có ở phần không gian.`);
     tagsTrong(cau)
       .filter((t) => khung.includes(t) && !s.trongKhung.includes(t))
       .forEach((t) => warnings.push(`Shot ${k + 1}: nhắc @${t} nhưng @${t} không ở trong khung shot này.`));
